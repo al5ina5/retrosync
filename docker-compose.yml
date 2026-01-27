@@ -1,0 +1,70 @@
+version: '3.8'
+
+services:
+  minio:
+    image: minio/minio:latest
+    container_name: retrosync-minio
+    ports:
+      - "9000:9000"  # API
+      - "9001:9001"  # Console
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+    command: server /data --console-address ":9001"
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - retrosync
+
+  createbuckets:
+    image: minio/mc:latest
+    depends_on:
+      - minio
+    entrypoint: >
+      /bin/sh -c "
+      sleep 10;
+      /usr/bin/mc alias set myminio http://minio:9000 ${MINIO_ROOT_USER:-minioadmin} ${MINIO_ROOT_PASSWORD:-minioadmin};
+      /usr/bin/mc mb myminio/retrosync-saves --ignore-existing;
+      /usr/bin/mc anonymous set download myminio/retrosync-saves;
+      exit 0;
+      "
+    networks:
+      - retrosync
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: retrosync-backend
+    ports:
+      - "3000:3000"
+    environment:
+      DATABASE_URL: "file:/data/retrosync.db"
+      JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
+      MINIO_ENDPOINT: http://minio:9000
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin}
+      MINIO_BUCKET: retrosync-saves
+      NEXT_PUBLIC_API_URL: ${NEXT_PUBLIC_API_URL:-http://localhost:3000}
+      NODE_ENV: production
+    volumes:
+      - backend_data:/data
+    depends_on:
+      - minio
+      - createbuckets
+    restart: unless-stopped
+    networks:
+      - retrosync
+
+volumes:
+  minio_data:
+  backend_data:
+
+networks:
+  retrosync:
+    driver: bridge

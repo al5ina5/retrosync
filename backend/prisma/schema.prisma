@@ -1,0 +1,75 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String        @id @default(uuid())
+  email             String        @unique
+  passwordHash      String
+  name              String?
+  subscriptionTier  String        @default("free") // free, pro, enterprise
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
+
+  devices           Device[]
+  pairingCodes      PairingCode[]
+}
+
+model Device {
+  id           String    @id @default(uuid())
+  userId       String
+  name         String
+  deviceType   String    // rg35xx, miyoo_flip, windows, mac, linux
+  apiKey       String    @unique
+  lastSyncAt   DateTime?
+  isActive     Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  syncLogs     SyncLog[]
+
+  @@index([userId])
+  @@index([apiKey])
+}
+
+model PairingCode {
+  id         String    @id @default(uuid())
+  code       String    @unique
+  userId     String
+  expiresAt  DateTime
+  used       Boolean   @default(false)
+  usedAt     DateTime?
+  deviceId   String?
+  createdAt  DateTime  @default(now())
+
+  user       User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([code])
+  @@index([userId])
+}
+
+model SyncLog {
+  id         String    @id @default(uuid())
+  deviceId   String
+  action     String    // upload, download, delete, conflict
+  filePath   String
+  fileSize   Int?
+  status     String    // success, failed, pending
+  errorMsg   String?
+  metadata   String?   // JSON string for additional data
+  createdAt  DateTime  @default(now())
+
+  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@index([deviceId])
+  @@index([createdAt])
+}
