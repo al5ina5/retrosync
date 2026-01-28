@@ -268,7 +268,11 @@ function getCodeFromServer()
         logMessage("Response received: " .. #resp .. " bytes")
         logMessage("Full response: " .. resp)
         
-        local result = jsonDecode(resp)
+        local result, pos, err = json.decode(resp, 1, nil)
+        if err then
+            logMessage("JSON decode error: " .. tostring(err))
+            result = nil
+        end
         if result then
             logMessage("JSON decode successful")
             logMessage("  success: " .. tostring(result.success))
@@ -329,7 +333,11 @@ function checkPairingStatus()
     local resp = httpPost(url, data)
     
     if resp and resp ~= "" then
-        local result = jsonDecode(resp)
+        local result, pos, err = json.decode(resp, 1, nil)
+        if err then
+            logMessage("JSON decode error: " .. tostring(err))
+            result = nil
+        end
         
         if result and result.success and result.data then
             local status = result.data.status
@@ -542,7 +550,11 @@ function uploadSave(filepath)
     local resp = httpPost(SERVER_URL .. "/api/sync/files", data, headers)
     
     if resp then
-        local result = jsonDecode(resp)
+        local result, pos, err = json.decode(resp, 1, nil)
+        if err then
+            logMessage("JSON decode error: " .. tostring(err))
+            result = nil
+        end
         return result and result.success
     end
     return false
