@@ -1,0 +1,100 @@
+import { NextRequest } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { successResponse, errorResponse } from '@/lib/utils'
+import { z } from 'zod'
+import { randomUUID } from 'crypto'
+
+const codeRequestSchema = z.object({
+  deviceType: z.enum(['rg35xx', 'miyoo_flip', 'windows', 'mac', 'linux', 'other']).optional(),
+})
+
+/**
+ * POST /api/devices/code
+ * Device gets a unique code on launch (Netflix-style)
+ * No authentication required
+ */
+export async function POST(request: NextRequest) {
+  try {
+    console.log('[CODE API] Request received')
+    const body = await request.json().catch(() => ({}))
+    console.log('[CODE API] Body:', JSON.stringify(body))
+    
+    const validation = codeRequestSchema.safeParse(body)
+    if (!validation.success) {
+      console.log('[CODE API] Validation failed:', validation.error.errors)
+      return errorResponse(validation.error.errors[0].message)
+    }
+
+    const { deviceType } = validation.data || {}
+    console.log('[CODE API] Device type:', deviceType)
+
+    // Generate unique 6-character alphanumeric code (e.g., "ABC123")
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Removed confusing chars (0, O, I, 1)
+    let code: string
+    let attempts = 0
+    const maxAttempts = 100
+
+    do {
+      code = ''
+      for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)]
+      }
+      attempts++
+
+      const existing = await prisma.pairingCode.findUnique({
+        where: { code },
+      })
+
+      if (!existing) {
+        break
+      }
+    } while (attempts < maxAttempts)
+
+    if (attempts >= maxAttempts) {
+      console.error('[CODE API] Failed to generate unique code after', attempts, 'attempts')
+      return errorResponse('Failed to generate unique code', 500)
+    }
+
+    console.log('[CODE API] Generated code:', code, 'after', attempts, 'attempts')
+
+    // Create pairing code (expires in 15 minutes)
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
+    
+    // Use raw SQL to bypass Prisma relation validation for nullable foreign keys
+    const id = randomUUID()
+    const codeUpper = code.toUpperCase() // Store uppercase for consistency
+    try {
+      await prisma.$executeRawUnsafe(
+        `INSERT INTO PairingCode (id, code, userId, deviceId, expiresAt, used, deviceType, createdAt) 
+         VALUES (?, ?, NULL, NULL, ?, 0, ?, datetime('now'))`,
+        id,
+        codeUpper,
+        expiresAt.toISOString(),
+        deviceType || 'other'
+      )
+    } catch (insertError) {
+      console.error('Insert error:', insertError)
+      return errorResponse('Failed to create pairing code', 500)
+    }
+    
+    // Fetch the created record
+    const pairingCode = await prisma.pairingCode.findUnique({
+      where: { id },
+    })
+    
+    if (!pairingCode) {
+      console.error('[CODE API] Failed to fetch created pairing code with id:', id)
+      return errorResponse('Failed to create pairing code', 500)
+    }
+
+    console.log('[CODE API] Successfully created code:', pairingCode.code, 'expires at:', pairingCode.expiresAt)
+    
+    return successResponse({
+      code: pairingCode.code,
+      expiresAt: pairingCode.expiresAt,
+    }, 'Code generated successfully')
+  } catch (error) {
+    console.error('Generate code error:', error)
+    return errorResponse('Failed to generate code', 500)
+  }
+}

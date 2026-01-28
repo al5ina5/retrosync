@@ -1,0 +1,28 @@
+{
+  "name": "retrosync",
+  "version": "1.0.0",
+  "description": "Cloud sync service for retro gaming save files",
+  "scripts": {
+    "dashboard:dev": "cd dashboard && npm run dev",
+    "dashboard:build": "cd dashboard && npm run build",
+    "dashboard:start": "cd dashboard && npm run start",
+    "dashboard:install": "cd dashboard && npm install",
+    "dashboard:db:generate": "cd dashboard && npx prisma generate",
+    "dashboard:db:push": "cd dashboard && npx prisma db push",
+    "dashboard:db:migrate": "cd dashboard && npx prisma migrate dev",
+    "client:build": "cd client && ./build/portmaster/build.sh",
+    "client:deploy": "cd client && ./build/portmaster/deploy.sh",
+    "client:build:deploy": "npm run client:build && npm run client:deploy",
+    "dev": "npm run dashboard:dev",
+    "build": "npm run dashboard:build && npm run client:build",
+    "deploy": "npm run client:build && npm run client:deploy"
+  },
+  "keywords": [
+    "retro",
+    "gaming",
+    "save-sync",
+    "cloud-sync"
+  ],
+  "author": "RetroSync Team",
+  "license": "MIT"
+}
