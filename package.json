@@ -18,7 +18,11 @@
     "client:build:mac": "cd client && ./build/macos/build.sh",
     "dev": "npm run dashboard:dev",
     "build": "npm run dashboard:build && npm run client:build",
-    "deploy": "npm run client:build && npm run client:deploy"
+    "deploy": "npm run client:build && npm run client:deploy",
+    "deploy:vercel": "vercel link --yes --project retrosync 2>/dev/null || true && node scripts/vercel-env.mjs && vercel --prod"
+  },
+  "devDependencies": {
+    "vercel": "^39.0.0"
   },
   "keywords": [
     "retro",

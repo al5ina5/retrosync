@@ -1,8 +1,9 @@
 #!/usr/bin/env node
 /**
  * Test script to verify download sync readiness
- * 
- * Usage: DATABASE_URL="file:./dev.db" node test-download-sync.js
+ *
+ * Usage (Neon Postgres, no local db file):
+ *   DATABASE_URL="postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require" node test-download-sync.js
  */
 
 const { PrismaClient } = require('@prisma/client')

@@ -54,3 +54,4 @@ minio_data/
 # Config
 client/.retrosync/
 config.json
+.vercel

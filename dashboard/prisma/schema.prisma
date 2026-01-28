@@ -1,6 +1,3 @@
-// This is your Prisma schema file,
-// learn more about it in the docs: https://pris.ly/d/prisma-schema
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -11,53 +8,50 @@ datasource db {
 }
 
 model User {
-  id                String        @id @default(uuid())
-  email             String        @unique
-  passwordHash      String
-  name              String?
-  subscriptionTier  String        @default("free") // free, pro, enterprise
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-
-  devices           Device[]
-  pairingCodes      PairingCode[]
-  saves             Save[]
+  id               String        @id @default(uuid())
+  email            String        @unique
+  passwordHash     String
+  name             String?
+  subscriptionTier String        @default("free")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  devices          Device[]
+  pairingCodes     PairingCode[]
+  saves            Save[]
 }
 
 model Device {
-  id           String    @id @default(uuid())
-  userId       String
-  name         String
-  deviceType   String    // rg35xx, miyoo_flip, windows, mac, linux
-  apiKey       String    @unique
-  lastSyncAt   DateTime?
-  isActive     Boolean   @default(true)
-  createdAt    DateTime  @default(now())
-  updatedAt    DateTime  @updatedAt
-
-  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  syncLogs     SyncLog[]
-  pairingCode  PairingCode?
-  saveVersions SaveVersion[]
+  id            String         @id @default(uuid())
+  userId        String
+  name          String
+  deviceType    String
+  apiKey        String         @unique
+  lastSyncAt    DateTime?
+  isActive      Boolean        @default(true)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+  user          User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  pairingCode   PairingCode?
   saveLocations SaveLocation[]
+  saveVersions  SaveVersion[]
+  syncLogs      SyncLog[]
 
   @@index([userId])
   @@index([apiKey])
 }
 
 model PairingCode {
-  id              String    @id @default(uuid())
-  code            String    @unique  // 6-character alphanumeric code
-  userId          String?   // NULL until user pairs, then set to user.id
-  deviceId        String?   @unique // NULL until device is created, then set to device.id
-  expiresAt       DateTime  // 15 minutes from creation
-  used            Boolean   @default(false)
-  usedAt          DateTime?
-  deviceType      String?   // Device type from initial code request
-  createdAt       DateTime  @default(now())
-
-  user            User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  device          Device?   @relation(fields: [deviceId], references: [id], onDelete: SetNull)
+  id         String    @id @default(uuid())
+  code       String    @unique
+  userId     String?
+  deviceId   String?   @unique
+  expiresAt  DateTime
+  used       Boolean   @default(false)
+  usedAt     DateTime?
+  deviceType String?
+  createdAt  DateTime  @default(now())
+  device     Device?   @relation(fields: [deviceId], references: [id])
+  user       User?     @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([code])
   @@index([userId])
@@ -65,21 +59,20 @@ model PairingCode {
 }
 
 model SyncLog {
-  id         String    @id @default(uuid())
-  deviceId   String
-  action     String    // upload, download, delete, conflict
-  filePath   String
-  fileSize   Int?
-  status     String    // success, failed, pending
-  errorMsg   String?
-  metadata   String?   // JSON string for additional data
-  createdAt  DateTime  @default(now())
-  saveId     String?
+  id            String       @id @default(uuid())
+  deviceId      String
+  action        String
+  filePath      String
+  fileSize      Int?
+  status        String
+  errorMsg      String?
+  metadata      String?
+  createdAt     DateTime     @default(now())
+  saveId        String?
   saveVersionId String?
-
-  device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-  save       Save?     @relation(fields: [saveId], references: [id], onDelete: SetNull)
-  saveVersion SaveVersion? @relation(fields: [saveVersionId], references: [id], onDelete: SetNull)
+  device        Device       @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  save          Save?        @relation(fields: [saveId], references: [id])
+  saveVersion   SaveVersion? @relation(fields: [saveVersionId], references: [id])
 
   @@index([deviceId])
   @@index([createdAt])
@@ -94,10 +87,9 @@ model Save {
   displayName String
   createdAt   DateTime       @default(now())
   updatedAt   DateTime       @updatedAt
-
   user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  versions    SaveVersion[]
   locations   SaveLocation[]
+  versions    SaveVersion[]
   syncLogs    SyncLog[]
 
   @@unique([userId, saveKey])
@@ -113,9 +105,8 @@ model SaveVersion {
   localModifiedAt DateTime
   uploadedAt      DateTime  @default(now())
   storageKey      String
-
-  save            Save      @relation(fields: [saveId], references: [id], onDelete: Cascade)
   device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  save            Save      @relation(fields: [saveId], references: [id], onDelete: Cascade)
   syncLogs        SyncLog[]
 
   @@index([saveId])
@@ -126,19 +117,18 @@ model SaveVersion {
 }
 
 model SaveLocation {
-  id        String   @id @default(uuid())
-  saveId    String
-  deviceId  String
-  deviceType String
-  localPath String
-  syncEnabled Boolean @default(true) // Enable/disable syncing for this save on this device
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id          String   @id @default(uuid())
+  saveId      String
+  deviceId    String
+  deviceType  String
+  localPath   String
+  syncEnabled Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  save        Save     @relation(fields: [saveId], references: [id], onDelete: Cascade)
 
-  save      Save     @relation(fields: [saveId], references: [id], onDelete: Cascade)
-  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
-
-  @@unique([saveId, deviceId, localPath]) // Allow multiple paths per device (e.g., different cores)
+  @@unique([saveId, deviceId, localPath])
   @@index([deviceId])
   @@index([saveId])
 }

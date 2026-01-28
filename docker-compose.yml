@@ -44,7 +44,11 @@ services:
     ports:
       - "3000:3000"
     environment:
-      DATABASE_URL: "file:/data/retrosync.db"
+      # Use external Postgres (e.g. Neon), no local db files.
+      # Provide DATABASE_URL when running docker-compose, for example:
+      #   export DATABASE_URL="postgresql://USER:PASSWORD@HOST/DBNAME?sslmode=require"
+      #   docker-compose up -d
+      DATABASE_URL: ${DATABASE_URL}
       JWT_SECRET: ${JWT_SECRET:-change-this-secret-in-production}
       MINIO_ENDPOINT: http://minio:9000
       MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
