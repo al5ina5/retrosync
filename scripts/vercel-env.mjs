@@ -42,13 +42,7 @@ const vars = [
   'S3_SECRET_ACCESS_KEY',
   'S3_BUCKET',
   'AWS_REGION',
-  'NEXT_PUBLIC_API_URL',
 ]
-
-// NEXT_PUBLIC_API_URL: use placeholder if localhost; will need update after first deploy
-if (env.NEXT_PUBLIC_API_URL?.includes('localhost')) {
-  env.NEXT_PUBLIC_API_URL = 'https://retrosync.vercel.app'
-}
 
 for (const k of vars) {
   const v = env[k]

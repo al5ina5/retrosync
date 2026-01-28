@@ -15,6 +15,7 @@
     "client:deploy:muos": "cd client && ./build/portmaster/deploy-muos.sh",
     "client:build:deploy": "npm run client:build && npm run client:deploy",
     "client:build:deploy:muos": "npm run client:build && npm run client:deploy:muos",
+    "client:deploy:prod": "cd client && RETROSYNC_SERVER_URL=https://retrosync.vercel.app ./build/portmaster/deploy.sh",
     "client:build:mac": "cd client && ./build/macos/build.sh",
     "dev": "npm run dashboard:dev",
     "build": "npm run dashboard:build && npm run client:build",

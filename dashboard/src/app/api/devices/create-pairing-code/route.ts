@@ -45,10 +45,12 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Generate QR code
+    // Generate QR code. Use the request origin so we don't rely on a
+    // hard-coded NEXT_PUBLIC_API_URL environment variable.
+    const apiUrl = request.nextUrl?.origin || 'http://localhost:3000'
     const qrCodeData = JSON.stringify({
       code,
-      apiUrl: process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3000',
+      apiUrl,
     })
 
     const qrCode = await QRCode.toDataURL(qrCodeData)
