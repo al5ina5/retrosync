@@ -70,30 +70,22 @@ export async function POST(request: NextRequest) {
     // Create pairing code (expires in 15 minutes)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
 
-    // Use parameterized raw SQL to bypass Prisma relation validation for nullable foreign keys
-    const id = randomUUID()
+    // Create the pairing code using Prisma (nullable FKs are allowed)
     const codeUpper = code.toUpperCase() // Store uppercase for consistency
+    let pairingCode
     try {
-      await prisma.$executeRawUnsafe(
-        `INSERT INTO PairingCode (id, code, userId, deviceId, expiresAt, used, deviceType, createdAt) 
-         VALUES (?, ?, NULL, NULL, ?, 0, ?, datetime('now'))`,
-        id,
-        codeUpper,
-        expiresAt.toISOString(),
-        deviceType || 'other'
-      )
+      pairingCode = await prisma.pairingCode.create({
+        data: {
+          code: codeUpper,
+          userId: null,
+          deviceId: null,
+          expiresAt,
+          used: false,
+          deviceType: deviceType || 'other',
+        },
+      })
     } catch (insertError) {
       console.error('Insert error:', insertError)
-      return errorResponse('Failed to create pairing code', 500)
-    }
-
-    // Fetch the created record
-    const pairingCode = await prisma.pairingCode.findUnique({
-      where: { id },
-    })
-
-    if (!pairingCode) {
-      console.error('[CODE API] Failed to fetch created pairing code with id:', id)
       return errorResponse('Failed to create pairing code', 500)
     }
 

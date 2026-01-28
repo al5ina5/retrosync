@@ -1818,13 +1818,6 @@ function doUploadDiscover()
             local needUpload = true
             local skipReason = nil
             
-            -- Only consider files that have *some* manifest presence (path or saveKey). Files with
-            -- neither are sync-disabled or unmapped; server would reject "sync disabled" anyway.
-            if not cloudEntry and not saveKeyEntry then
-                needUpload = false
-                skipReason = "not in manifest (sync disabled or unmapped)"
-            end
-            
             -- First check: match by full path (path is in manifest)
             if needUpload and cloudEntry and cloudEntry.cloudMs and cloudEntry.cloudMs > 0 and localMs then
                 if localMs <= cloudEntry.cloudMs + MTIME_TOLERANCE_MS then
