@@ -143,7 +143,7 @@ export default function DashboardPage() {
               View and manage your uploaded save files
             </p>
             <span className="inline-block mt-4 text-vercel-blue-400 hover:text-vercel-blue-300 font-medium">
-              View Saves →
+              Recent →
             </span>
           </Link>
         </div>

@@ -83,6 +83,10 @@ npm run deploy
 6. Enter the pairing code from the web dashboard
 7. Upload save files!
 
+### Client configuration (optional)
+
+- **`data/server_url`** — If present, the client uses this as the API base URL (one line, no trailing slash). Otherwise it uses the built‑in default. Create this file in the app’s `data` folder on the device when pointing at a custom server (e.g. production).
+
 ## License
 
 MIT

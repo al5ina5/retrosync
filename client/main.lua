@@ -41,6 +41,7 @@ local API_KEY_FILE = DATA_DIR .. "/api_key"
 local DEVICE_NAME_FILE = DATA_DIR .. "/device_name"
 local CODE_FILE = DATA_DIR .. "/code"
 local LOG_FILE = DATA_DIR .. "/debug.log"
+local SERVER_URL_FILE = DATA_DIR .. "/server_url"
 
 -- States
 local STATE_SHOWING_CODE = 1
@@ -93,11 +94,11 @@ local filesListError = ""  -- Error message for files list
 local filesListPending = false  -- Flag to defer API call to next frame (so screen renders first)
 
 -- Home menu selection (CONNECTED state)
-local homeSelectedIndex = 1  -- 1 = Sync Saves, 2 = View Saves
+local homeSelectedIndex = 1  -- 1 = Sync, 2 = Recent
 
 -- Home intro animation (CONNECTED)
 local homeIntroTimer = 0
-local homeIntroDuration = 0.5  -- total animation time for title + buttons
+local homeIntroDuration = 0.9  -- slow down intro for more impact
 
 -- Timer for polling
 local pollTimer = 0
@@ -108,28 +109,37 @@ local uploadStartTimer = 0  -- Timer to prevent immediate cancellation
 local pollCount = 0
 
 -- Font
-local titleFont = nil
-local codeFont = nil
-local largeCountFont = nil
+local titleFont = nil       -- General headings (Minecraft)
+local codeFont = nil        -- Primary UI text (Minecraft)
+local largeCountFont = nil  -- Big numbers (Minecraft)
+local deviceFont = nil      -- Small labels (Minecraft)
+local logoFont = nil        -- Main title "RETROSYNC" (Super Meatball)
 
 function love.load()
     -- Set up graphics
     love.graphics.setBackgroundColor(0, 0, 0)
     love.graphics.setDefaultFilter("nearest", "nearest")
     
-    -- Load Minecraft font with error handling
+    -- Load fonts with error handling
     local fontPath = "assets/Minecraft.ttf"
+    local logoFontPath = "assets/Super Meatball.ttf"
     local ok, err = pcall(function()
+        -- Base Minecraft fonts
         titleFont = love.graphics.newFont(fontPath, 48)
         codeFont = love.graphics.newFont(fontPath, 32)
         largeCountFont = love.graphics.newFont(fontPath, 96)  -- Large font for count
+        deviceFont = love.graphics.newFont(fontPath, 24)
+        -- Logo font for main title
+        logoFont = love.graphics.newFont(logoFontPath, 64)
     end)
     if not ok then
         print("ERROR: Failed to load font from " .. fontPath .. ": " .. tostring(err))
-        -- Fallback to default font
+        -- Fallback to default fonts
         titleFont = love.graphics.newFont(48)
         codeFont = love.graphics.newFont(32)
         largeCountFont = love.graphics.newFont(96)
+        deviceFont = love.graphics.newFont(24)
+        logoFont = love.graphics.newFont(64)
     end
     
     -- Create data directory within app folder (with error handling)
@@ -144,6 +154,15 @@ function love.load()
     logMessage("=== RetroSync App Started ===")
     logMessage("App directory: " .. APP_DIR)
     logMessage("Data directory: " .. DATA_DIR)
+    
+    -- Override SERVER_URL from config if present
+    local configUrl = loadServerUrl()
+    if configUrl and configUrl ~= "" then
+        SERVER_URL = configUrl
+        logMessage("Using server URL from config: " .. SERVER_URL)
+    else
+        logMessage("Using default server URL: " .. SERVER_URL)
+    end
     
     -- Load API key if exists (already paired)
     apiKey = loadApiKey()
@@ -257,7 +276,7 @@ function love.draw()
     
     if currentState == STATE_SHOWING_CODE then
         -- Show RETRO SYNC title and code
-        love.graphics.setFont(titleFont)
+        love.graphics.setFont(logoFont or titleFont)
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("RETRO SYNC", 0, 150, screenWidth, "center")
         
@@ -288,19 +307,24 @@ function love.draw()
         local title = "RETROSYNC"
 
         -- Layout: center the whole block (title + buttons + device name)
-        love.graphics.setFont(titleFont)
-        local titleHeight = titleFont:getHeight()
+        love.graphics.setFont(logoFont or titleFont)
+        local titleHeight = (logoFont or titleFont):getHeight()
         love.graphics.setFont(codeFont)
         local lineHeight = codeFont:getHeight()
 
-        local gapTitleToButtons = 24
+        -- Vertical spacing: keep the two buttons tightly grouped,
+        -- but give more breathing room above (title) and below (device line),
+        -- and keep those two gaps symmetrical.
+        local gapTitleToButtons = 64
         local gapButtons = 16
-        local gapButtonsToDevice = 20
+        local gapButtonsToDevice = 64
 
         local optionHeight = 50
         local groupHeight =
             titleHeight +
             gapTitleToButtons +
+            optionHeight +
+            gapButtons +
             optionHeight +
             gapButtons +
             optionHeight +
@@ -363,7 +387,7 @@ function love.draw()
         local optionY1 = groupTopY + titleHeight + gapTitleToButtons
         local optionY2 = optionY1 + optionHeight + gapButtons
 
-        -- Option 1: Sync Saves
+        -- Option 1: Sync
         if homeSelectedIndex == 1 then
             love.graphics.setColor(0.3, 0.7, 0.9, alpha)
         else
@@ -371,9 +395,9 @@ function love.draw()
         end
         love.graphics.rectangle("fill", optionX, optionY1, optionWidth, optionHeight, 10, 10)
         love.graphics.setColor(1, 1, 1, alpha)
-        love.graphics.printf("Sync Saves", 0, optionY1 + 10, screenWidth, "center")
+        love.graphics.printf("Sync", 0, optionY1 + 10, screenWidth, "center")
 
-        -- Option 2: View Saves
+        -- Option 2: Recent
         if homeSelectedIndex == 2 then
             love.graphics.setColor(0.3, 0.9, 0.5, alpha)
         else
@@ -381,12 +405,17 @@ function love.draw()
         end
         love.graphics.rectangle("fill", optionX, optionY2, optionWidth, optionHeight, 10, 10)
         love.graphics.setColor(1, 1, 1, alpha)
-        love.graphics.printf("View Saves", 0, optionY2 + 10, screenWidth, "center")
+        love.graphics.printf("Recent", 0, optionY2 + 10, screenWidth, "center")
 
-        -- Device line below buttons, lower opacity
+        -- Device line below buttons, lower opacity and smaller font
         if deviceName then
             local deviceY = optionY2 + optionHeight + gapButtonsToDevice
-            love.graphics.setColor(1, 1, 1, 0.4)
+            if deviceFont then
+                love.graphics.setFont(deviceFont)
+            else
+                love.graphics.setFont(codeFont)
+            end
+            love.graphics.setColor(1, 1, 1, 0.5)
             love.graphics.printf("Device: " .. deviceName, 0, deviceY, screenWidth, "center")
         end
         
@@ -455,9 +484,9 @@ function love.draw()
                     love.graphics.rectangle("fill", 10, y - 2, screenWidth - 20, lineHeight - 2, 5, 5)
                 end
                 
-                -- Simplified games list entry:
-                --   left  = game name
-                --   right = status (SYNCED / DISABLED / NOT ON THIS DEVICE)
+            -- Simplified games list entry:
+            --   left  = game name
+            --   right = status (SYNCED / DISABLED / NOT ON THIS DEVICE / PENDING)
                 local displayName = save.name or "Unknown"
                 local statusStr = save.status or ""
 
@@ -490,30 +519,69 @@ function love.draw()
         
         
     elseif currentState == STATE_UPLOADING or currentState == STATE_DOWNLOADING or currentState == STATE_SUCCESS then
-        -- Unified minimal sync screen: X with UP / DOWN, no extra text
-        local centerY = screenHeight / 2 - 40
+        -- Unified sync screen: UPLOADED / DOWNLOADED with centered status text
         local leftX = screenWidth * 0.25
         local rightX = screenWidth * 0.75
 
-        -- Left side: UP
+        -- Measure block to vertically center: counts + labels + status line
+        love.graphics.setFont(largeCountFont)
+        local countHeight = largeCountFont:getHeight()
+        love.graphics.setFont(deviceFont or codeFont)
+        local labelHeight = (deviceFont or codeFont):getHeight()
+        local statusHeight = codeFont:getHeight()
+
+        local gapCountToLabel = 40
+        local gapLabelToStatus = 100
+
+        local blockHeight = countHeight + gapCountToLabel + labelHeight + gapLabelToStatus + statusHeight
+        local topY = (screenHeight - blockHeight) / 2
+
+        -- Left side: UPLOADED
         love.graphics.setFont(largeCountFont)
         love.graphics.setColor(0.4, 1, 0.6)
         local upText = tostring(uploadSuccess or 0)
-        love.graphics.printf(upText, leftX - 100, centerY, 200, "center")
+        love.graphics.printf(upText, leftX - 100, topY, 200, "center")
         
-        love.graphics.setFont(codeFont)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("UP", leftX - 100, centerY + 120, 200, "center")
+        love.graphics.setFont(deviceFont or codeFont)
+        love.graphics.setColor(1, 1, 1, 0.5)
+        love.graphics.printf("UPLOADED", leftX - 100, topY + countHeight + gapCountToLabel, 200, "center")
 
-        -- Right side: DOWN
+        -- Right side: DOWNLOADED
         love.graphics.setFont(largeCountFont)
         love.graphics.setColor(0.4, 0.7, 1.0)
         local downText = tostring(downloadSuccess or 0)
-        love.graphics.printf(downText, rightX - 100, centerY, 200, "center")
+        love.graphics.printf(downText, rightX - 100, topY, 200, "center")
 
+        love.graphics.setFont(deviceFont or codeFont)
+        love.graphics.setColor(1, 1, 1, 0.5)
+        love.graphics.printf("DOWNLOADED", rightX - 100, topY + countHeight + gapCountToLabel, 200, "center")
+
+        -- Centered status line under both columns
+        local statusText = ""
+        local r, g, b = 1, 1, 1
+
+        -- Map states to status label + color
+        if currentState == STATE_UPLOADING then
+            -- Distinguish initial loading vs active upload
+            if uploadPending or uploadDiscoverPending then
+                statusText = "LOADING"
+                r, g, b = 0.6, 0.6, 0.6      -- gray
+            else
+                statusText = "UPLOADING"
+                r, g, b = 1.0, 0.9, 0.4      -- yellow
+            end
+        elseif currentState == STATE_DOWNLOADING then
+            statusText = "DOWNLOADING"
+            r, g, b = 0.5, 0.7, 1.0          -- blue
+        elseif currentState == STATE_SUCCESS then
+            statusText = "COMPLETE"
+            r, g, b = 0.4, 1.0, 0.6          -- green
+        end
+
+        love.graphics.setColor(r, g, b)
         love.graphics.setFont(codeFont)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("DOWN", rightX - 100, centerY + 120, 200, "center")
+        local statusY = topY + countHeight + gapCountToLabel + labelHeight + gapLabelToStatus
+        love.graphics.printf(statusText, 0, statusY, screenWidth, "center")
     end
     
     -- Show error if any (only for non-showing-code states)
@@ -538,10 +606,10 @@ function love.keypressed(key)
         elseif key == "return" or key == "space" or key == "a" or key == "x" then
             -- Confirm current selection
             if homeSelectedIndex == 1 then
-                logMessage("love.keypressed: Sync Saves selected from home")
+                logMessage("love.keypressed: Sync selected from home")
                 uploadSaves()
-            else
-                logMessage("love.keypressed: View Saves selected from home")
+            elseif homeSelectedIndex == 2 then
+                logMessage("love.keypressed: Recent selected from home")
                 showFilesList()
             end
         elseif key == "escape" then
@@ -581,8 +649,6 @@ end
 
 function love.gamepadpressed(joystick, button)
     logMessage("love.gamepadpressed: button=" .. tostring(button) .. ", state=" .. currentState)
-    -- Note: In PortMaster, A/B buttons may be inverted.
-    -- Physical B button (upload) reports as "a" in LÖVE, so we check for "a" to trigger upload.
     if currentState == STATE_CONNECTED then
         if button == "dpup" then
             if homeSelectedIndex > 1 then
@@ -592,13 +658,13 @@ function love.gamepadpressed(joystick, button)
             if homeSelectedIndex < 2 then
                 homeSelectedIndex = homeSelectedIndex + 1
             end
-        elseif button == "a" or button == "b" then
-            -- Confirm current selection with main face button
+        elseif button == "a" then
+            -- A = confirm current selection
             if homeSelectedIndex == 1 then
-                logMessage("love.gamepadpressed: Sync Saves selected from home")
+                logMessage("love.gamepadpressed: Sync selected from home")
                 uploadSaves()
-            else
-                logMessage("love.gamepadpressed: View Saves selected from home")
+            elseif homeSelectedIndex == 2 then
+                logMessage("love.gamepadpressed: Recent selected from home")
                 showFilesList()
             end
         end
@@ -613,28 +679,39 @@ function love.gamepadpressed(joystick, button)
             if filesListSelectedIndex < #savesList then
                 filesListSelectedIndex = filesListSelectedIndex + 1
             end
-        elseif button == "b" or button == "a" then
-            -- Go back to connected state (b is physical A, a is physical B)
+        elseif button == "b" then
+            -- B = go back to connected state from files list
             currentState = STATE_CONNECTED
             filesListScroll = 0
             filesListSelectedIndex = 1
         end
     elseif currentState == STATE_UPLOADING or currentState == STATE_DOWNLOADING or currentState == STATE_SUCCESS then
-        -- Allow exit with B button (reports as "b" in LÖVE, which is physical A button)
-        -- But user wants B to exit, so we check for "b" which is the physical A button
-        -- Actually, let's check both - "b" is physical A, but user said "B" so maybe they mean the button labeled B
-        -- In PortMaster, physical B = "a" in LÖVE, physical A = "b" in LÖVE
-        -- User wants to exit with "B", so we check for "a" (which is physical B button)
-        -- But prevent immediate cancellation right after starting upload
-        if button == "a" and not uploadJustStarted then
+        -- B = go back / cancel on sync screens (A should NOT go back)
+        -- Prevent immediate cancellation right after starting upload/download
+        if button == "b" and not uploadJustStarted then
             logMessage("love.gamepadpressed: Exit triggered via gamepad (B button, state=" .. currentState .. ")")
             uploadCancelled = true
             downloadCancelled = true
             currentState = STATE_CONNECTED
-        elseif button == "a" and uploadJustStarted then
+        elseif button == "b" and uploadJustStarted then
             logMessage("love.gamepadpressed: Cancel ignored (upload just started, state=" .. currentState .. ")")
         end
     end
+end
+
+function doUnpairDevice()
+    logMessage("doUnpairDevice: Clearing pairing data and returning to code screen")
+    apiKey = nil
+    deviceName = nil
+    deviceCode = nil
+    isPaired = false
+    pairingError = ""
+    homeSelectedIndex = 1
+    pcall(function() os.remove(API_KEY_FILE) end)
+    pcall(function() os.remove(DEVICE_NAME_FILE) end)
+    pcall(function() os.remove(CODE_FILE) end)
+    currentState = STATE_SHOWING_CODE
+    getCodeFromServer()
 end
 
 -- Get code from server (first run only)
@@ -773,6 +850,8 @@ function checkPairingStatus()
 end
 
 -- HTTP helper using curl via os.execute
+local HTTP_GET_TIMEOUT = 30  -- seconds; GETs (saves list, manifest, etc.) can be slower
+
 function httpGet(url, headers)
     local tmpfile = "/tmp/retrosync_resp.txt"
     local headerStr = ""
@@ -781,8 +860,9 @@ function httpGet(url, headers)
             headerStr = headerStr .. " -H '" .. k .. ": " .. v .. "'"
         end
     end
+    local escapedUrl = url:gsub("'", "'\\''")
     local ok, err = pcall(function()
-        os.execute("curl -s" .. (headerStr ~= "" and " " or "") .. headerStr .. " '" .. url .. "' > " .. tmpfile .. " 2>/dev/null")
+        os.execute("curl -s -m " .. HTTP_GET_TIMEOUT .. (headerStr ~= "" and " " or "") .. headerStr .. " '" .. escapedUrl .. "' > " .. tmpfile .. " 2>/dev/null")
     end)
     if not ok then return nil end
     
@@ -1078,7 +1158,12 @@ function fetchSavesList()
                     end
                     local localMs = localMtime and (localMtime * 1000) or nil
 
-                    local MTIME_TOLERANCE_MS = 65000
+                    -- Allow a generous tolerance window between local and cloud mtimes.
+                    -- Many devices have coarse filesystem timestamps and/or clock skew,
+                    -- so we only treat something as truly "pending" when the difference
+                    -- is clearly significant.
+                    local MTIME_TOLERANCE_MS = 10 * 60 * 1000 -- 10 minutes
+
                     if localMs and cloudMs then
                         if localMs > cloudMs + MTIME_TOLERANCE_MS then
                             pendingDir = "UP"
@@ -1088,10 +1173,11 @@ function fetchSavesList()
                     elseif localMs and not cloudMs then
                         -- Has local file but no known cloud version for this device yet
                         pendingDir = "UP"
-                    elseif cloudMs and not localMs then
-                        -- Cloud knows about it but local file missing
-                        pendingDir = "DOWN"
                     end
+                    -- IMPORTANT: we do NOT treat (cloudMs and not localMs) as "PENDING DOWN".
+                    -- In practice, getFileMtimeSeconds can fail for reasons other than a
+                    -- missing file (e.g., platform quirks), and that was causing almost
+                    -- everything to show as PENDING ↓ even when it was actually synced.
                 end
 
                 -- Fallback: if no explicit mapping for this device but manifest
@@ -1138,7 +1224,7 @@ function fetchSavesList()
     logMessage("=== fetchSavesList END ===")
 end
 
--- Show files list (called when FILES button is pressed)
+-- Show recent games list (called when RECENT is selected)
 function showFilesList()
     logMessage("=== showFilesList CALLED ===")
     filesListScroll = 0
@@ -2238,6 +2324,24 @@ function saveCode(code)
         file:write(code)
         file:close()
     end
+end
+
+function loadServerUrl()
+    local file = io.open(SERVER_URL_FILE, "r")
+    if file then
+        local line = file:read("*line")
+        file:close()
+        if line then
+            line = line:match("^%s*(.-)%s*$")
+            if line and line ~= "" then
+                if line:sub(-1) == "/" then
+                    line = line:sub(1, -2)
+                end
+                return line
+            end
+        end
+    end
+    return nil
 end
 
 function loadApiKey()
