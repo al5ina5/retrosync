@@ -1,11 +1,15 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateApiKey } from '@/lib/auth'
-import { successResponse, errorResponse } from '@/lib/utils'
+import { successResponse, errorResponse, generateDeviceName } from '@/lib/utils'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security'
 
 const statusSchema = z.object({
-  code: z.string().length(6, 'Code must be 6 characters'),
+  code: z
+    .string()
+    .length(6, 'Code must be 6 characters')
+    .regex(/^[A-Z0-9]+$/i, 'Code must be alphanumeric'),
 })
 
 /**
@@ -15,6 +19,15 @@ const statusSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request, {
+      windowMs: 60 * 1000,
+      max: 60,
+      keyPrefix: 'status',
+    })
+    if (!rl.allowed) {
+      return errorResponse('Too many status checks, please slow down.', 429)
+    }
+
     const body = await request.json()
 
     // Validate input
@@ -71,7 +84,7 @@ export async function POST(request: NextRequest) {
     if (pairingCode.userId && !pairingCode.used) {
       // Auto-create device and mark code as used
       const apiKey = generateApiKey()
-      const deviceName = `${pairingCode.deviceType || 'Device'} ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+      const deviceName = generateDeviceName(pairingCode.deviceType)
 
       const device = await prisma.device.create({
         data: {

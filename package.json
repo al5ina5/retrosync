@@ -12,7 +12,10 @@
     "dashboard:db:migrate": "cd dashboard && npx prisma migrate dev",
     "client:build": "cd client && ./build/portmaster/build.sh",
     "client:deploy": "cd client && ./build/portmaster/deploy.sh",
+    "client:deploy:muos": "cd client && ./build/portmaster/deploy-muos.sh",
     "client:build:deploy": "npm run client:build && npm run client:deploy",
+    "client:build:deploy:muos": "npm run client:build && npm run client:deploy:muos",
+    "client:build:mac": "cd client && ./build/macos/build.sh",
     "dev": "npm run dashboard:dev",
     "build": "npm run dashboard:build && npm run client:build",
     "deploy": "npm run client:build && npm run client:deploy"

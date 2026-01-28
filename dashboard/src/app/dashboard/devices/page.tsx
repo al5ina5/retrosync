@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
+import useSWR, { mutate } from 'swr'
+import { fetcher } from '@/lib/utils'
 
 interface Device {
   id: string
@@ -13,50 +15,40 @@ interface Device {
   createdAt: string
 }
 
+interface DevicesResponse {
+  devices: Device[]
+}
+
 export default function DevicesPage() {
   const router = useRouter()
-  const [devices, setDevices] = useState<Device[]>([])
   const [deviceCodeInput, setDeviceCodeInput] = useState('')
   const [isPairing, setIsPairing] = useState(false)
   const [pairingSuccess, setPairingSuccess] = useState(false)
-  const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
+  // Check authentication
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
       router.push('/auth/login')
-      return
     }
-
-    fetchDevices()
   }, [router])
 
-  const fetchDevices = async () => {
-    try {
-      const token = localStorage.getItem('token')
-      const response = await fetch('/api/devices', {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      })
-
-      const data = await response.json()
-
-      if (data.success) {
-        setDevices(data.data.devices)
-        return true
-      } else {
-        setError(data.error || 'Failed to fetch devices')
-        return false
-      }
-    } catch (err) {
-      setError('Failed to fetch devices')
-      return false
-    } finally {
-      setLoading(false)
+  // Fetch devices with SWR
+  const { data, error: swrError, isLoading } = useSWR<DevicesResponse>(
+    typeof window !== 'undefined' && localStorage.getItem('token') ? '/api/devices' : null,
+    fetcher,
+    {
+      refreshInterval: pairingSuccess ? 2000 : 0, // Poll every 2s when pairing
+      onError: (err) => {
+        if (err instanceof Error && err.message !== 'Unauthorized') {
+          setError(err.message)
+        }
+      },
     }
-  }
+  )
+
+  const devices = data?.devices || []
 
   const handleDeviceCodeSubmit = async () => {
     if (deviceCodeInput.length !== 6) {
@@ -84,24 +76,10 @@ export default function DevicesPage() {
       if (data.success) {
         setPairingSuccess(true)
         setDeviceCodeInput('')
-        // Refresh devices list periodically until device appears (device pairs asynchronously)
-        let attempts = 0
-        const maxAttempts = 15 // Check for 30 seconds (15 * 2s)
-        const checkInterval = setInterval(async () => {
-          attempts++
-          await fetchDevices()
-          // If we've checked enough times, stop polling
-          if (attempts >= maxAttempts) {
-            clearInterval(checkInterval)
-            setPairingSuccess(false)
-          }
-        }, 2000)
-        
-        // Also stop after 30 seconds regardless
+        // Start polling for device to appear
         setTimeout(() => {
-          clearInterval(checkInterval)
           setPairingSuccess(false)
-        }, 30000)
+        }, 30000) // Stop polling after 30 seconds
       } else {
         setError(data.error || 'Failed to link code')
       }
@@ -129,7 +107,9 @@ export default function DevicesPage() {
       const data = await response.json()
 
       if (data.success) {
-        fetchDevices()
+        // Revalidate devices list
+        mutate('/api/devices')
+        setError('')
       } else {
         setError(data.error || 'Failed to delete device')
       }
@@ -138,7 +118,7 @@ export default function DevicesPage() {
     }
   }
 
-  if (loading) {
+  if (isLoading) {
     return (
       <div className="min-h-screen bg-vercel-black flex items-center justify-center">
         <div className="text-vercel-white text-xl">Loading…</div>
@@ -156,8 +136,8 @@ export default function DevicesPage() {
               <Link href="/" className="text-xl font-semibold hover:text-vercel-gray-300 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vercel-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-vercel-black rounded">
                 RetroSync
               </Link>
-              <Link 
-                href="/dashboard" 
+              <Link
+                href="/dashboard"
                 className="text-vercel-gray-400 hover:text-vercel-white transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-vercel-blue-500 focus-visible:ring-offset-2 focus-visible:ring-offset-vercel-black rounded px-3 py-2"
               >
                 ← Back to Dashboard
@@ -174,13 +154,13 @@ export default function DevicesPage() {
           <p className="text-vercel-gray-400">Add and manage your paired devices</p>
         </div>
 
-        {error && (
-          <div 
+        {(error || swrError) && (
+          <div
             className="bg-red-500/10 border border-red-500/50 text-red-400 px-4 py-3 rounded-lg mb-6"
             role="alert"
             aria-live="polite"
           >
-            {error}
+            {error || (swrError instanceof Error ? swrError.message : 'Failed to fetch devices')}
           </div>
         )}
 
@@ -190,8 +170,8 @@ export default function DevicesPage() {
             <h2 className="text-2xl font-semibold mb-6">Add Device</h2>
             <div className="space-y-6">
               <div>
-                <label 
-                  htmlFor="device-code" 
+                <label
+                  htmlFor="device-code"
                   className="block text-sm font-medium text-vercel-gray-300 mb-3"
                 >
                   Enter the 6-character code from your Miyoo device
@@ -226,9 +206,9 @@ export default function DevicesPage() {
                   Enter the code displayed on your device screen
                 </p>
               </div>
-              
+
               {pairingSuccess && (
-                <div 
+                <div
                   className="bg-green-500/10 border border-green-500/50 text-green-400 px-4 py-3 rounded-lg"
                   role="alert"
                   aria-live="polite"
@@ -289,9 +269,9 @@ export default function DevicesPage() {
                         Last sync: <span className="text-vercel-gray-300">
                           {device.lastSyncAt
                             ? new Intl.DateTimeFormat('en-US', {
-                                dateStyle: 'medium',
-                                timeStyle: 'short',
-                              }).format(new Date(device.lastSyncAt))
+                              dateStyle: 'medium',
+                              timeStyle: 'short',
+                            }).format(new Date(device.lastSyncAt))
                             : 'Never'}
                         </span>
                       </p>

@@ -3,7 +3,16 @@ import bcrypt from 'bcryptjs'
 import { NextRequest } from 'next/server'
 import crypto from 'crypto'
 
-const JWT_SECRET = process.env.JWT_SECRET || 'your-super-secret-jwt-key-change-this-in-production'
+// In production we require an explicit JWT secret. In non-production we allow a
+// deterministic fallback to keep local/dev setups smooth while still avoiding
+// accidental weak secrets in real deployments.
+const JWT_SECRET =
+  process.env.JWT_SECRET ||
+  (process.env.NODE_ENV !== 'production'
+    ? 'your-super-secret-jwt-key-change-this-in-development-only'
+    : (() => {
+      throw new Error('JWT_SECRET must be set in production')
+    })())
 
 export interface JWTPayload {
   userId: string
@@ -28,8 +37,10 @@ export async function verifyPassword(password: string, hash: string): Promise<bo
 
 /**
  * Generate a JWT token
+ *
+ * Default expiry is shorter to limit risk window; callers can override if needed.
  */
-export function generateToken(payload: JWTPayload, expiresIn: string = '30d'): string {
+export function generateToken(payload: JWTPayload, expiresIn: string = '7d'): string {
   return jwt.sign(payload, JWT_SECRET, { expiresIn } as SignOptions)
 }
 
@@ -77,7 +88,8 @@ export function generateApiKey(): string {
  * Generate a 6-digit pairing code
  */
 export function generatePairingCode(): string {
-  return Math.floor(100000 + Math.random() * 900000).toString()
+  // Use cryptographically strong randomness instead of Math.random
+  return crypto.randomInt(100000, 1000000).toString()
 }
 
 /**

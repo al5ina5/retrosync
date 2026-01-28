@@ -2,11 +2,25 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { successResponse, errorResponse } from '@/lib/utils'
 import { z } from 'zod'
-import { randomUUID } from 'crypto'
+import { randomBytes, randomUUID } from 'crypto'
 
 const codeRequestSchema = z.object({
   deviceType: z.enum(['rg35xx', 'miyoo_flip', 'windows', 'mac', 'linux', 'other']).optional(),
 })
+
+/**
+ * Generate a cryptographically strong 6-character alphanumeric code
+ * using the same character set as before, but without Math.random.
+ */
+function generateSecureCode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Removed confusing chars (0, O, I, 1)
+  const bytes = randomBytes(6)
+  let code = ''
+  for (let i = 0; i < 6; i++) {
+    code += chars[bytes[i] % chars.length]
+  }
+  return code
+}
 
 /**
  * POST /api/devices/code
@@ -18,7 +32,7 @@ export async function POST(request: NextRequest) {
     console.log('[CODE API] Request received')
     const body = await request.json().catch(() => ({}))
     console.log('[CODE API] Body:', JSON.stringify(body))
-    
+
     const validation = codeRequestSchema.safeParse(body)
     if (!validation.success) {
       console.log('[CODE API] Validation failed:', validation.error.errors)
@@ -29,16 +43,12 @@ export async function POST(request: NextRequest) {
     console.log('[CODE API] Device type:', deviceType)
 
     // Generate unique 6-character alphanumeric code (e.g., "ABC123")
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789' // Removed confusing chars (0, O, I, 1)
     let code: string
     let attempts = 0
     const maxAttempts = 100
 
     do {
-      code = ''
-      for (let i = 0; i < 6; i++) {
-        code += chars[Math.floor(Math.random() * chars.length)]
-      }
+      code = generateSecureCode()
       attempts++
 
       const existing = await prisma.pairingCode.findUnique({
@@ -59,8 +69,8 @@ export async function POST(request: NextRequest) {
 
     // Create pairing code (expires in 15 minutes)
     const expiresAt = new Date(Date.now() + 15 * 60 * 1000)
-    
-    // Use raw SQL to bypass Prisma relation validation for nullable foreign keys
+
+    // Use parameterized raw SQL to bypass Prisma relation validation for nullable foreign keys
     const id = randomUUID()
     const codeUpper = code.toUpperCase() // Store uppercase for consistency
     try {
@@ -76,23 +86,26 @@ export async function POST(request: NextRequest) {
       console.error('Insert error:', insertError)
       return errorResponse('Failed to create pairing code', 500)
     }
-    
+
     // Fetch the created record
     const pairingCode = await prisma.pairingCode.findUnique({
       where: { id },
     })
-    
+
     if (!pairingCode) {
       console.error('[CODE API] Failed to fetch created pairing code with id:', id)
       return errorResponse('Failed to create pairing code', 500)
     }
 
     console.log('[CODE API] Successfully created code:', pairingCode.code, 'expires at:', pairingCode.expiresAt)
-    
-    return successResponse({
-      code: pairingCode.code,
-      expiresAt: pairingCode.expiresAt,
-    }, 'Code generated successfully')
+
+    return successResponse(
+      {
+        code: pairingCode.code,
+        expiresAt: pairingCode.expiresAt,
+      },
+      'Code generated successfully'
+    )
   } catch (error) {
     console.error('Generate code error:', error)
     return errorResponse('Failed to generate code', 500)

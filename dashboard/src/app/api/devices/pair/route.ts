@@ -3,9 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security'
 
 const pairSchema = z.object({
-  code: z.string().length(6, 'Code must be 6 characters'),
+  code: z
+    .string()
+    .length(6, 'Code must be 6 characters')
+    .regex(/^[A-Z0-9]+$/i, 'Code must be alphanumeric'),
 })
 
 /**
@@ -15,6 +19,15 @@ const pairSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request, {
+      windowMs: 60 * 1000,
+      max: 30,
+      keyPrefix: 'pair',
+    })
+    if (!rl.allowed) {
+      return errorResponse('Too many pairing attempts, please try again shortly.', 429)
+    }
+
     // Authenticate user
     const user = getUserFromRequest(request)
     if (!user) {

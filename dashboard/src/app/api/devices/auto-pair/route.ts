@@ -1,11 +1,15 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateApiKey } from '@/lib/auth'
-import { successResponse, errorResponse } from '@/lib/utils'
+import { successResponse, errorResponse, generateDeviceName } from '@/lib/utils'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security'
 
 const autoPairSchema = z.object({
-  deviceId: z.string().length(6, 'Device ID must be 6 digits'),
+  deviceId: z
+    .string()
+    .length(6, 'Device ID must be 6 digits')
+    .regex(/^\d{6}$/, 'Device ID must be numeric'),
 })
 
 /**
@@ -16,6 +20,15 @@ const autoPairSchema = z.object({
  */
 export async function POST(request: NextRequest) {
   try {
+    const rl = checkRateLimit(request, {
+      windowMs: 60 * 1000,
+      max: 60,
+      keyPrefix: 'auto-pair',
+    })
+    if (!rl.allowed) {
+      return errorResponse('Too many pairing checks, please slow down.', 429)
+    }
+
     const body = await request.json()
 
     // Validate input
@@ -84,14 +97,14 @@ export async function POST(request: NextRequest) {
 
     // Pairing code found! Complete the pairing automatically
     const apiKey = generateApiKey()
-    const deviceName = `Miyoo Flip ${new Date().toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`
+    const deviceName = generateDeviceName(pairingCode.deviceType)
 
     // Create device
     const device = await prisma.device.create({
       data: {
         userId: pairingCode.userId,
         name: deviceName,
-        deviceType: 'miyoo_flip',
+        deviceType: pairingCode.deviceType || 'other',
         apiKey,
         lastSyncAt: new Date(),
       },

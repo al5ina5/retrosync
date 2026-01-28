@@ -11,6 +11,46 @@ export interface ApiResponse<T = any> {
 }
 
 /**
+ * SWR fetcher with authentication
+ * Handles token from localStorage and redirects on 401
+ */
+export async function fetcher<T = any>(url: string): Promise<T> {
+  const token = typeof window !== 'undefined' ? localStorage.getItem('token') : null
+
+  if (!token) {
+    throw new Error('No authentication token')
+  }
+
+  const response = await fetch(url, {
+    headers: {
+      'Authorization': `Bearer ${token}`,
+    },
+  })
+
+  if (response.status === 401) {
+    // Redirect to login on unauthorized
+    if (typeof window !== 'undefined') {
+      localStorage.removeItem('token')
+      localStorage.removeItem('user')
+      window.location.href = '/auth/login'
+    }
+    throw new Error('Unauthorized')
+  }
+
+  if (!response.ok) {
+    throw new Error(`HTTP error! status: ${response.status}`)
+  }
+
+  const data: ApiResponse<T> = await response.json()
+
+  if (!data.success) {
+    throw new Error(data.error || 'Request failed')
+  }
+
+  return data.data as T
+}
+
+/**
  * Create a success response
  */
 export function successResponse<T>(data: T, message?: string) {
@@ -62,4 +102,36 @@ export function validateRequiredFields(body: any, fields: string[]): string | nu
     }
   }
   return null
+}
+
+/**
+ * Generate a funky random device name
+ * Returns names like "Cosmic Gizmo", "Stellar Widget", "Nebula Device", etc.
+ */
+export function generateDeviceName(deviceType?: string): string {
+  const adjectives = [
+    'Cosmic', 'Stellar', 'Nebula', 'Quantum', 'Galactic', 'Astro', 'Lunar', 'Solar',
+    'Electric', 'Neon', 'Cyber', 'Digital', 'Virtual', 'Hyper', 'Ultra', 'Mega',
+    'Turbo', 'Super', 'Epic', 'Legendary', 'Mystic', 'Ancient', 'Crystal', 'Golden',
+    'Silver', 'Platinum', 'Diamond', 'Ruby', 'Sapphire', 'Emerald', 'Amber', 'Jade',
+    'Frost', 'Flame', 'Thunder', 'Storm', 'Shadow', 'Phantom', 'Ghost', 'Spirit',
+    'Wild', 'Fierce', 'Bold', 'Swift', 'Rapid', 'Blazing', 'Frozen', 'Eternal'
+  ]
+
+  const nouns = [
+    'Gizmo', 'Widget', 'Device', 'Gadget', 'Thing', 'Machine', 'Unit', 'Module',
+    'Console', 'Station', 'Hub', 'Node', 'Core', 'Engine', 'Drive', 'System',
+    'Beast', 'Warrior', 'Knight', 'Guardian', 'Champion', 'Hero', 'Legend', 'Myth',
+    'Phoenix', 'Dragon', 'Tiger', 'Eagle', 'Wolf', 'Falcon', 'Hawk', 'Lion',
+    'Star', 'Comet', 'Planet', 'Moon', 'Sun', 'Orb', 'Sphere', 'Cube',
+    'Blade', 'Shield', 'Sword', 'Bow', 'Arrow', 'Spear', 'Axe', 'Hammer'
+  ]
+
+  const randomAdjective = adjectives[Math.floor(Math.random() * adjectives.length)]
+  const randomNoun = nouns[Math.floor(Math.random() * nouns.length)]
+
+  // Add a random number suffix for extra uniqueness (1-9999)
+  const randomNum = Math.floor(Math.random() * 9999) + 1
+
+  return `${randomAdjective} ${randomNoun} ${randomNum}`
 }

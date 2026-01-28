@@ -21,6 +21,7 @@ model User {
 
   devices           Device[]
   pairingCodes      PairingCode[]
+  saves             Save[]
 }
 
 model Device {
@@ -37,6 +38,8 @@ model Device {
   user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
   syncLogs     SyncLog[]
   pairingCode  PairingCode?
+  saveVersions SaveVersion[]
+  saveLocations SaveLocation[]
 
   @@index([userId])
   @@index([apiKey])
@@ -71,9 +74,71 @@ model SyncLog {
   errorMsg   String?
   metadata   String?   // JSON string for additional data
   createdAt  DateTime  @default(now())
+  saveId     String?
+  saveVersionId String?
 
   device     Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  save       Save?     @relation(fields: [saveId], references: [id], onDelete: SetNull)
+  saveVersion SaveVersion? @relation(fields: [saveVersionId], references: [id], onDelete: SetNull)
 
   @@index([deviceId])
   @@index([createdAt])
+  @@index([saveId])
+  @@index([saveVersionId])
+}
+
+model Save {
+  id          String         @id @default(uuid())
+  userId      String
+  saveKey     String
+  displayName String
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  versions    SaveVersion[]
+  locations   SaveLocation[]
+  syncLogs    SyncLog[]
+
+  @@unique([userId, saveKey])
+  @@index([userId])
+}
+
+model SaveVersion {
+  id              String    @id @default(uuid())
+  saveId          String
+  deviceId        String
+  contentHash     String
+  byteSize        Int
+  localModifiedAt DateTime
+  uploadedAt      DateTime  @default(now())
+  storageKey      String
+
+  save            Save      @relation(fields: [saveId], references: [id], onDelete: Cascade)
+  device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+  syncLogs        SyncLog[]
+
+  @@index([saveId])
+  @@index([deviceId])
+  @@index([uploadedAt])
+  @@index([localModifiedAt])
+  @@index([contentHash])
+}
+
+model SaveLocation {
+  id        String   @id @default(uuid())
+  saveId    String
+  deviceId  String
+  deviceType String
+  localPath String
+  syncEnabled Boolean @default(true) // Enable/disable syncing for this save on this device
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  save      Save     @relation(fields: [saveId], references: [id], onDelete: Cascade)
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([saveId, deviceId, localPath]) // Allow multiple paths per device (e.g., different cores)
+  @@index([deviceId])
+  @@index([saveId])
 }

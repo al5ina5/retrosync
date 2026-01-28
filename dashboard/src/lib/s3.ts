@@ -1,11 +1,36 @@
 import { S3 } from 'aws-sdk'
 
+const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000'
+const endpointUrl = endpoint.startsWith('http') ? endpoint : `http://${endpoint}`
+const useSsl = endpointUrl.startsWith('https://')
+
+// In production require explicit MinIO credentials; in non-production allow
+// the default dev credentials so local setups continue to work smoothly.
+const accessKeyId =
+  process.env.MINIO_ROOT_USER ||
+  (process.env.NODE_ENV !== 'production'
+    ? 'minioadmin'
+    : (() => {
+      throw new Error('MINIO_ROOT_USER must be set in production')
+    })())
+
+const secretAccessKey =
+  process.env.MINIO_ROOT_PASSWORD ||
+  (process.env.NODE_ENV !== 'production'
+    ? 'minioadmin'
+    : (() => {
+      throw new Error('MINIO_ROOT_PASSWORD must be set in production')
+    })())
+
 const s3Config = {
-  endpoint: process.env.MINIO_ENDPOINT || 'http://localhost:9000',
-  accessKeyId: process.env.MINIO_ROOT_USER || 'minioadmin',
-  secretAccessKey: process.env.MINIO_ROOT_PASSWORD || 'minioadmin',
+  endpoint: endpointUrl,
   s3ForcePathStyle: true,
   signatureVersion: 'v4',
+  sslEnabled: useSsl,
+  accessKeyId,
+  secretAccessKey,
+  // Avoid SDK using region-based default endpoint when using custom MinIO
+  region: process.env.AWS_REGION || 'us-east-1',
 }
 
 export const s3Client = new S3(s3Config)

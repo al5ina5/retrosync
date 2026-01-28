@@ -3,9 +3,13 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest, generatePairingCode } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { z } from 'zod'
+import { checkRateLimit } from '@/lib/security'
 
 const pairByDeviceIdSchema = z.object({
-  deviceId: z.string().length(6, 'Device ID must be 6 digits'),
+  deviceId: z
+    .string()
+    .length(6, 'Device ID must be 6 digits')
+    .regex(/^\d{6}$/, 'Device ID must be numeric'),
 })
 
 export async function POST(request: NextRequest) {
@@ -14,6 +18,15 @@ export async function POST(request: NextRequest) {
     const user = getUserFromRequest(request)
     if (!user) {
       return unauthorizedResponse()
+    }
+
+    const rl = checkRateLimit(request, {
+      windowMs: 60 * 1000,
+      max: 30,
+      keyPrefix: 'pair-by-id',
+    })
+    if (!rl.allowed) {
+      return errorResponse('Too many pairing attempts, please try again shortly.', 429)
     }
 
     const body = await request.json()
