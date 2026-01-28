@@ -97,7 +97,13 @@ export async function POST(request: NextRequest) {
 
     // Pairing code found! Complete the pairing automatically
     const apiKey = generateApiKey()
-    const deviceName = generateDeviceName(pairingCode.deviceType)
+    const deviceName = generateDeviceName(pairingCode.deviceType || 'other')
+
+    // In practice userId should always be set for auto-pairing,
+    // but guard defensively to satisfy types and avoid bad data.
+    if (!pairingCode.userId) {
+      return errorResponse('Invalid pairing code: missing user.', 400)
+    }
 
     // Create device
     const device = await prisma.device.create({

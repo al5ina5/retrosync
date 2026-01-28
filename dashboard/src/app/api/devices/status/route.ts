@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     if (pairingCode.userId && !pairingCode.used) {
       // Auto-create device and mark code as used
       const apiKey = generateApiKey()
-      const deviceName = generateDeviceName(pairingCode.deviceType)
+      const deviceName = generateDeviceName(pairingCode.deviceType || 'other')
 
       const device = await prisma.device.create({
         data: {

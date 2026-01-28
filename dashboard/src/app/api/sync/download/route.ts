@@ -31,6 +31,7 @@ export async function GET(request: NextRequest) {
     }
 
     const bytes = await downloadFile(saveVersion.storageKey)
+    const body = new Uint8Array(bytes)
 
     // Best-effort log
     prisma.syncLog
@@ -47,7 +48,7 @@ export async function GET(request: NextRequest) {
       })
       .catch((e) => console.warn('Failed to log download:', e))
 
-    return new Response(bytes, {
+    return new Response(body, {
       status: 200,
       headers: {
         'content-type': 'application/octet-stream',

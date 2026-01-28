@@ -3,7 +3,7 @@ node_modules/
 __pycache__/
 *.pyc
 *.pyo
-*.pyd
+*.pyd,
 .Python
 env/
 venv/
@@ -12,9 +12,9 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment files
-.env
-.env.local
-.env.*.local
+# .env
+# .env.local
+# .env.*.local
 
 # Database
 *.db

@@ -1,25 +1,28 @@
 import { S3 } from 'aws-sdk'
 
-const endpoint = process.env.MINIO_ENDPOINT || 'http://localhost:9000'
-const endpointUrl = endpoint.startsWith('http') ? endpoint : `http://${endpoint}`
+// Prefer generic S3-style env vars; fall back to legacy MINIO_* for
+// backwards-compatibility in older environments.
+const rawEndpoint =
+  process.env.S3_ENDPOINT || process.env.MINIO_ENDPOINT || 'http://localhost:9000'
+const endpointUrl = rawEndpoint.startsWith('http') ? rawEndpoint : `http://${rawEndpoint}`
 const useSsl = endpointUrl.startsWith('https://')
 
-// In production require explicit MinIO credentials; in non-production allow
-// the default dev credentials so local setups continue to work smoothly.
 const accessKeyId =
+  process.env.S3_ACCESS_KEY_ID ||
   process.env.MINIO_ROOT_USER ||
   (process.env.NODE_ENV !== 'production'
     ? 'minioadmin'
     : (() => {
-      throw new Error('MINIO_ROOT_USER must be set in production')
+      throw new Error('S3_ACCESS_KEY_ID must be set in production')
     })())
 
 const secretAccessKey =
+  process.env.S3_SECRET_ACCESS_KEY ||
   process.env.MINIO_ROOT_PASSWORD ||
   (process.env.NODE_ENV !== 'production'
     ? 'minioadmin'
     : (() => {
-      throw new Error('MINIO_ROOT_PASSWORD must be set in production')
+      throw new Error('S3_SECRET_ACCESS_KEY must be set in production')
     })())
 
 const s3Config = {
@@ -29,13 +32,14 @@ const s3Config = {
   sslEnabled: useSsl,
   accessKeyId,
   secretAccessKey,
-  // Avoid SDK using region-based default endpoint when using custom MinIO
+  // Avoid SDK using region-based default endpoint when using custom S3 endpoints
   region: process.env.AWS_REGION || 'us-east-1',
 }
 
 export const s3Client = new S3(s3Config)
 
-export const BUCKET_NAME = process.env.MINIO_BUCKET || 'retrosync-saves'
+export const BUCKET_NAME =
+  process.env.S3_BUCKET || process.env.MINIO_BUCKET || 'retrosync-saves'
 
 /**
  * Upload a file to S3

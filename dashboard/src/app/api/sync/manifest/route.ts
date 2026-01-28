@@ -51,7 +51,7 @@ export async function GET(request: NextRequest) {
 
     // For each save, if multiple locations exist, pick the one with the latest version
     const selectedLocations: typeof locations = []
-    for (const [saveId, locs] of locationsBySave.entries()) {
+    locationsBySave.forEach((locs, saveId) => {
       if (locs.length === 1) {
         selectedLocations.push(locs[0])
       } else {
@@ -77,7 +77,7 @@ export async function GET(request: NextRequest) {
           `[Manifest] Device ${device.id} has ${locs.length} locations for save ${latestLoc.save.saveKey}, selected latest: ${latestLoc.localPath}`
         )
       }
-    }
+    })
 
     const manifest = selectedLocations.map((loc) => {
       // Select latest version, preferring real mtimes over fallback times

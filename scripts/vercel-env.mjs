@@ -36,10 +36,11 @@ for (const line of raw.split('\n')) {
 const vars = [
   'DATABASE_URL',
   'JWT_SECRET',
-  'MINIO_ROOT_USER',
-  'MINIO_ROOT_PASSWORD',
-  'MINIO_ENDPOINT',
-  'MINIO_BUCKET',
+  // Storage (generic S3-style names)
+  'S3_ENDPOINT',
+  'S3_ACCESS_KEY_ID',
+  'S3_SECRET_ACCESS_KEY',
+  'S3_BUCKET',
   'AWS_REGION',
   'NEXT_PUBLIC_API_URL',
 ]
