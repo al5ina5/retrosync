@@ -1,8 +1,9 @@
 import { NextRequest } from 'next/server'
+import { Prisma } from '@prisma/client'
 import { prisma } from '@/lib/prisma'
 import { successResponse, errorResponse } from '@/lib/utils'
 import { z } from 'zod'
-import { randomBytes, randomUUID } from 'crypto'
+import { randomBytes } from 'crypto'
 
 const codeRequestSchema = z.object({
   deviceType: z.enum(['rg35xx', 'miyoo_flip', 'windows', 'mac', 'linux', 'other']).optional(),
@@ -100,6 +101,20 @@ export async function POST(request: NextRequest) {
     )
   } catch (error) {
     console.error('Generate code error:', error)
+
+    const isPrismaInit = error instanceof Prisma.PrismaClientInitializationError
+    const isPrismaKnown = error instanceof Prisma.PrismaClientKnownRequestError
+    const isPrismaOther =
+      error instanceof Prisma.PrismaClientUnknownRequestError ||
+      error instanceof Prisma.PrismaClientValidationError
+
+    if (isPrismaInit) {
+      return errorResponse('Database connection failed', 500)
+    }
+    if (isPrismaKnown || isPrismaOther) {
+      return errorResponse('Database error', 500)
+    }
+
     return errorResponse('Failed to generate code', 500)
   }
 }

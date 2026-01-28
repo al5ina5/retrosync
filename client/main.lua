@@ -4,7 +4,8 @@
 -- Load JSON library
 local json = require("lib.dkjson")
 
-local SERVER_URL = "http://10.0.0.197:3002"
+-- Default API base URL (production). Can be overridden via data/server_url.
+local SERVER_URL = "https://retrosync.vercel.app"
 -- Ensure no trailing slash
 if SERVER_URL:sub(-1) == "/" then
     SERVER_URL = SERVER_URL:sub(1, -2)
@@ -113,7 +114,6 @@ local titleFont = nil       -- General headings (Minecraft)
 local codeFont = nil        -- Primary UI text (Minecraft)
 local largeCountFont = nil  -- Big numbers (Minecraft)
 local deviceFont = nil      -- Small labels (Minecraft)
-local logoFont = nil        -- Main title "RETROSYNC" (Super Meatball)
 
 function love.load()
     -- Set up graphics
@@ -122,15 +122,12 @@ function love.load()
     
     -- Load fonts with error handling
     local fontPath = "assets/Minecraft.ttf"
-    local logoFontPath = "assets/Super Meatball.ttf"
     local ok, err = pcall(function()
         -- Base Minecraft fonts
         titleFont = love.graphics.newFont(fontPath, 48)
         codeFont = love.graphics.newFont(fontPath, 32)
         largeCountFont = love.graphics.newFont(fontPath, 96)  -- Large font for count
         deviceFont = love.graphics.newFont(fontPath, 24)
-        -- Logo font for main title
-        logoFont = love.graphics.newFont(logoFontPath, 64)
     end)
     if not ok then
         print("ERROR: Failed to load font from " .. fontPath .. ": " .. tostring(err))
@@ -139,7 +136,6 @@ function love.load()
         codeFont = love.graphics.newFont(32)
         largeCountFont = love.graphics.newFont(96)
         deviceFont = love.graphics.newFont(24)
-        logoFont = love.graphics.newFont(64)
     end
     
     -- Create data directory within app folder (with error handling)
@@ -276,7 +272,7 @@ function love.draw()
     
     if currentState == STATE_SHOWING_CODE then
         -- Show RETRO SYNC title and code
-        love.graphics.setFont(logoFont or titleFont)
+        love.graphics.setFont(titleFont)
         love.graphics.setColor(1, 1, 1)
         love.graphics.printf("RETRO SYNC", 0, 150, screenWidth, "center")
         
@@ -307,8 +303,8 @@ function love.draw()
         local title = "RETROSYNC"
 
         -- Layout: center the whole block (title + buttons + device name)
-        love.graphics.setFont(logoFont or titleFont)
-        local titleHeight = (logoFont or titleFont):getHeight()
+        love.graphics.setFont(titleFont)
+        local titleHeight = titleFont:getHeight()
         love.graphics.setFont(codeFont)
         local lineHeight = codeFont:getHeight()
 

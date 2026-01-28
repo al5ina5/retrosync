@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import useSWR, { mutate } from 'swr'
 import { fetcher } from '@/lib/utils'
+import AnimatedLogo from '@/components/AnimatedLogo'
 
 interface Device {
   id: string
@@ -120,7 +121,8 @@ export default function DevicesPage() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen bg-vercel-black flex items-center justify-center">
+      <div className="min-h-screen bg-vercel-black flex flex-col items-center justify-center">
+        <AnimatedLogo className="mb-8" />
         <div className="text-vercel-white text-xl">Loading…</div>
       </div>
     )
@@ -149,7 +151,8 @@ export default function DevicesPage() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
+        <div className="mb-12 text-center">
+          <AnimatedLogo className="mb-6 text-5xl sm:text-6xl lg:text-7xl font-bold" />
           <h1 className="text-4xl font-bold mb-2">My Devices</h1>
           <p className="text-vercel-gray-400">Add and manage your paired devices</p>
         </div>
