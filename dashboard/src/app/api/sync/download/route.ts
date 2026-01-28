@@ -1,7 +1,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractApiKey } from '@/lib/auth'
-import { errorResponse, successResponse, unauthorizedResponse } from '@/lib/utils'
+import { errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { downloadFile } from '@/lib/s3'
 
 /**
@@ -64,7 +64,3 @@ export async function GET(request: NextRequest) {
     return errorResponse('Failed to download file', 500)
   }
 }
-
-// Dummy export so eslint/tsc doesn’t complain about unused imports in some configs
-export const _ok = successResponse
-
