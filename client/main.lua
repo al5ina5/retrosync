@@ -65,6 +65,7 @@ local downloadProgress = ""
 local downloadSuccess = 0
 local downloadTotal = 0
 local isPaired = false
+local unmappedSavesCount = 0  -- Saves from other devices that need initial upload
 local uploadCancelled = false  -- Flag to cancel upload
 local uploadPending = false  -- Flag to defer upload to next frame
 local uploadJustStarted = false  -- Flag to prevent immediate cancellation
@@ -97,9 +98,11 @@ local filesListPending = false  -- Flag to defer API call to next frame (so scre
 -- Home menu selection (CONNECTED state)
 local homeSelectedIndex = 1  -- 1 = Sync, 2 = Recent
 
--- Home intro animation (CONNECTED)
+-- Home intro animation (CONNECTED and SHOWING_CODE)
 local homeIntroTimer = 0
 local homeIntroDuration = 0.9  -- slow down intro for more impact
+local codeIntroTimer = 0  -- Animation timer for code screen
+local codeIntroDuration = 0.9  -- Same duration as home screen
 
 -- Timer for polling
 local pollTimer = 0
@@ -173,6 +176,7 @@ function love.load()
         -- Not paired yet, need to get/show code
         currentState = STATE_SHOWING_CODE
         isPaired = false
+        codeIntroTimer = 0  -- Initialize code screen animation
         
         -- Load code from local storage, or get new one from server
         deviceCode = loadCode()
@@ -190,6 +194,11 @@ function love.update(dt)
     -- Advance home intro animation while on CONNECTED screen
     if currentState == STATE_CONNECTED and homeIntroTimer < homeIntroDuration then
         homeIntroTimer = math.min(homeIntroTimer + dt, homeIntroDuration)
+    end
+    
+    -- Advance code intro animation while on SHOWING_CODE screen
+    if currentState == STATE_SHOWING_CODE and codeIntroTimer < codeIntroDuration then
+        codeIntroTimer = math.min(codeIntroTimer + dt, codeIntroDuration)
     end
     
     -- Clear the "just started" flag after a short delay to allow cancellation
@@ -271,15 +280,97 @@ function love.draw()
     local screenHeight = love.graphics.getHeight()
     
     if currentState == STATE_SHOWING_CODE then
-        -- Show RETRO SYNC title and code
-        love.graphics.setFont(titleFont)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("RETRO SYNC", 0, 150, screenWidth, "center")
+        -- Code screen with animated RETROSYNC header (matching CONNECTED screen)
+        local title = "RETROSYNC"
         
+        -- Layout: center the whole block (title + code + status)
+        love.graphics.setFont(titleFont)
+        local titleHeight = titleFont:getHeight()
         love.graphics.setFont(codeFont)
-        love.graphics.setColor(1, 1, 1)
-        love.graphics.printf("CODE", 0, 220, screenWidth, "center")
-        love.graphics.printf(deviceCode or "------", 0, 280, screenWidth, "center")
+        local lineHeight = codeFont:getHeight()
+        
+        -- Vertical spacing similar to CONNECTED screen
+        local gapTitleToCode = 64
+        local gapCodeToStatus = 32
+        local gapStatusToError = 32
+        
+        local codeLabelHeight = lineHeight
+        local codeValueHeight = lineHeight * 1.5
+        local statusHeight = lineHeight
+        
+        local groupHeight =
+            titleHeight +
+            gapTitleToCode +
+            codeLabelHeight +
+            codeValueHeight +
+            gapCodeToStatus +
+            statusHeight +
+            gapStatusToError +
+            (pairingError ~= "" and lineHeight or 0)
+        
+        local groupTopY = (screenHeight - groupHeight) / 2
+        
+        -- Total animation progress 0 -> 1 over codeIntroDuration
+        local t = math.max(0, math.min(1, codeIntroTimer / codeIntroDuration))
+        
+        -- Per-letter stagger for accordion / tetris effect (same as CONNECTED)
+        local letterCount = #title
+        local fallDuration = 0.35  -- portion of total used for fall + slam
+        local stagger = (codeIntroDuration - fallDuration) / math.max(letterCount - 1, 1)
+        
+        local targetY = groupTopY
+        local totalWidth = titleFont:getWidth(title)
+        local startX = (screenWidth - totalWidth) / 2
+        
+        -- Draw animated RETROSYNC title
+        love.graphics.setFont(titleFont)
+        local x = startX
+        for i = 1, letterCount do
+            local ch = title:sub(i, i)
+            local charWidth = titleFont:getWidth(ch)
+            
+            local charStart = (i - 1) * stagger
+            local charT = (codeIntroTimer - charStart) / fallDuration
+            
+            if charT > 0 then
+                if charT > 1 then charT = 1 end
+                -- Ease + overshoot for slam, then slight sway
+                local eased = charT * charT * (3 - 2 * charT)
+                local overshoot = math.sin(eased * math.pi) * 8
+                local y = targetY - (1 - eased) * 80 + overshoot
+                
+                -- Small horizontal sway based on index
+                local sway = math.sin((codeIntroTimer * 10) + i * 0.7) * (1 - charT) * 2
+                
+                love.graphics.setColor(1, 1, 1)
+                love.graphics.print(ch, x + sway, y)
+            end
+            
+            x = x + charWidth
+        end
+        
+        -- Code section fades in after letters
+        local codeStart = codeIntroDuration * 0.4
+        local codeT = 0
+        if codeIntroTimer > codeStart then
+            codeT = math.max(0, math.min(1, (codeIntroTimer - codeStart) / (codeIntroDuration - codeStart)))
+        end
+        
+        local codeY = groupTopY + titleHeight + gapTitleToCode
+        
+        -- CODE label
+        love.graphics.setFont(codeFont)
+        love.graphics.setColor(1, 1, 1, codeT)
+        love.graphics.printf("CODE", 0, codeY, screenWidth, "center")
+        
+        -- Code value (larger)
+        local codeValueY = codeY + codeLabelHeight
+        love.graphics.setFont(codeFont)
+        love.graphics.setColor(1, 1, 1, codeT)
+        love.graphics.printf(deviceCode or "------", 0, codeValueY, screenWidth, "center")
+        
+        -- Status section (waiting indicator or error)
+        local statusY = codeValueY + codeValueHeight + gapCodeToStatus
         
         -- Show polling indicator
         local dots = math.floor(pollIndicator * 2) % 4
@@ -287,15 +378,16 @@ function love.draw()
         for i = 1, dots do
             dotStr = dotStr .. "."
         end
-        love.graphics.setColor(0.5, 0.5, 0.5)
-        love.graphics.setFont(codeFont)
-        love.graphics.printf("Waiting" .. dotStr, 0, 350, screenWidth, "center")
         
-        -- Show pairing error if any
-        if pairingError ~= "" then
-            love.graphics.setColor(1, 0.8, 0.4)
+        if pairingError == "" then
+            love.graphics.setColor(0.5, 0.5, 0.5, codeT)
             love.graphics.setFont(codeFont)
-            love.graphics.printf(pairingError, 0, 400, screenWidth, "center")
+            love.graphics.printf("Waiting" .. dotStr, 0, statusY, screenWidth, "center")
+        else
+            -- Show pairing error
+            love.graphics.setColor(1, 0.8, 0.4, codeT)
+            love.graphics.setFont(codeFont)
+            love.graphics.printf(pairingError, 0, statusY, screenWidth, "center")
         end
         
     elseif currentState == STATE_CONNECTED then
@@ -578,6 +670,18 @@ function love.draw()
         love.graphics.setFont(codeFont)
         local statusY = topY + countHeight + gapCountToLabel + labelHeight + gapLabelToStatus
         love.graphics.printf(statusText, 0, statusY, screenWidth, "center")
+        
+        -- Show message about unmapped saves (from other devices)
+        if unmappedSavesCount > 0 and currentState == STATE_SUCCESS then
+            love.graphics.setColor(1, 0.9, 0.5)  -- Yellow/orange for info
+            love.graphics.setFont(codeFont)
+            local unmappedY = statusY + codeFont:getHeight() + 20
+            local unmappedMsg = unmappedSavesCount .. " save" .. (unmappedSavesCount > 1 and "s" or "") .. " available from other devices"
+            love.graphics.printf(unmappedMsg, 0, unmappedY, screenWidth, "center")
+            love.graphics.setColor(0.8, 0.8, 0.8)  -- Gray for hint
+            local hintY = unmappedY + codeFont:getHeight() + 10
+            love.graphics.printf("Run the game once to enable syncing", 0, hintY, screenWidth, "center")
+        end
     end
     
     -- Show error if any (only for non-showing-code states)
@@ -703,6 +807,7 @@ function doUnpairDevice()
     isPaired = false
     pairingError = ""
     homeSelectedIndex = 1
+    codeIntroTimer = 0  -- Reset animation when returning to code screen
     pcall(function() os.remove(API_KEY_FILE) end)
     pcall(function() os.remove(DEVICE_NAME_FILE) end)
     pcall(function() os.remove(CODE_FILE) end)
@@ -1620,6 +1725,14 @@ function doDownloadDiscover()
             pairingError = "Manifest error: " .. tostring(manErr or "unknown")
             currentState = STATE_CONNECTED
             return
+        end
+
+        -- Count unmapped saves (from other devices, need initial upload)
+        unmappedSavesCount = 0
+        for _, item in ipairs(manifest) do
+            if item and item.needsMapping then
+                unmappedSavesCount = unmappedSavesCount + 1
+            end
         end
 
         downloadQueue = {}

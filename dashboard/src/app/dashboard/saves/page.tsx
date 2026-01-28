@@ -148,7 +148,7 @@ export default function SavesPage() {
       }
 
       const response = await fetch(
-        `/api/saves?filePath=${encodeURIComponent(save.saveKey)}`,
+        `/api/saves?saveId=${encodeURIComponent(save.id)}`,
         {
           method: 'DELETE',
           headers: {
@@ -409,8 +409,8 @@ export default function SavesPage() {
                           <div
                             key={location.id}
                             className={`flex items-center justify-between p-2 rounded ${isVisuallyLatest
-                                ? 'bg-green-500/10 border border-green-500/30'
-                                : 'bg-vercel-gray-900/50'
+                              ? 'bg-green-500/10 border border-green-500/30'
+                              : 'bg-vercel-gray-900/50'
                               }`}
                           >
                             <div className="flex-1 min-w-0">

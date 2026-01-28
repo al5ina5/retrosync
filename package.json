@@ -10,6 +10,7 @@
     "dashboard:db:generate": "cd dashboard && npx prisma generate",
     "dashboard:db:push": "cd dashboard && npx prisma db push",
     "dashboard:db:migrate": "cd dashboard && npx prisma migrate dev",
+    "dashboard:db:baseline-prod": "./scripts/baseline-prod.sh",
     "// client build/deploy (standardized)": "",
     "client:build:portmaster": "cd client && ./build/portmaster/build.sh",
     "client:deploy:portmaster": "cd client && RETROSYNC_SERVER_URL=https://retrosync.vercel.app ./build/portmaster/deploy.sh",

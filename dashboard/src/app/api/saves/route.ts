@@ -155,6 +155,7 @@ export async function GET(request: NextRequest) {
 
 /**
  * DELETE /api/saves - Delete a save file
+ * Accepts either saveId (preferred) or filePath (legacy) query parameter
  */
 export async function DELETE(request: NextRequest) {
   try {
@@ -164,77 +165,95 @@ export async function DELETE(request: NextRequest) {
       return unauthorizedResponse()
     }
 
-    // Get filePath from query parameters
+    // Get saveId or filePath from query parameters
     const { searchParams } = new URL(request.url)
+    const saveId = searchParams.get('saveId')
     const filePath = searchParams.get('filePath')
 
-    if (!filePath) {
-      return errorResponse('filePath query parameter is required', 400)
-    }
+    let save: { id: string; userId: string; versions: { storageKey: string }[] } | null = null
 
-    // Get all devices for this user
-    const devices = await prisma.device.findMany({
-      where: { userId: user.userId },
-      select: { id: true },
-    })
-
-    const deviceIds = devices.map((d) => d.id)
-
-    if (deviceIds.length === 0) {
-      return errorResponse('No devices found for user', 404)
-    }
-
-    // Find all sync logs for this filePath from user's devices
-    const syncLogs = await prisma.syncLog.findMany({
-      where: {
-        deviceId: { in: deviceIds },
-        filePath: filePath,
-      },
-      include: {
-        device: {
-          select: {
-            id: true,
+    if (saveId) {
+      // New way: delete by saveId
+      save = await prisma.save.findFirst({
+        where: {
+          id: saveId,
+          userId: user.userId, // Ensure user owns this save
+        },
+        include: {
+          versions: {
+            select: {
+              storageKey: true,
+            },
           },
         },
-      },
-    })
+      })
+    } else if (filePath) {
+      // Legacy way: find by saveKey (filePath)
+      save = await prisma.save.findFirst({
+        where: {
+          saveKey: filePath,
+          userId: user.userId,
+        },
+        include: {
+          versions: {
+            select: {
+              storageKey: true,
+            },
+          },
+        },
+      })
+    } else {
+      return errorResponse('saveId or filePath query parameter is required', 400)
+    }
 
-    if (syncLogs.length === 0) {
+    if (!save) {
       return errorResponse('Save file not found', 404)
     }
 
-    // Delete files from S3
+    // Delete files from S3 using storageKey from SaveVersions
     const deletePromises: Promise<void>[] = []
-    for (const log of syncLogs) {
-      // Construct S3 key: userId/deviceId/filePath
-      // Normalize and strictly validate path segments to avoid traversal.
-      const sanitizedPath = filePath.replace(/^\//, '')
-      if (sanitizedPath.includes('..')) {
-        return errorResponse('Invalid file path', 400)
+    for (const version of save.versions) {
+      if (version.storageKey) {
+        deletePromises.push(
+          deleteFile(version.storageKey).catch((error) => {
+            console.warn(`Failed to delete S3 file ${version.storageKey}:`, error)
+            // Continue even if S3 delete fails
+          })
+        )
       }
-      const s3Key = `${user.userId}/${log.device.id}/${sanitizedPath}`
-
-      // Attempt to delete from S3 (don't fail if file doesn't exist)
-      deletePromises.push(
-        deleteFile(s3Key).catch((error) => {
-          console.warn(`Failed to delete S3 file ${s3Key}:`, error)
-          // Continue even if S3 delete fails
-        })
-      )
     }
 
     await Promise.all(deletePromises)
 
-    // Delete sync logs
+    // Delete all related records (cascade deletes should handle most, but be explicit)
+    // Delete in order: SyncLogs -> SaveVersions -> SaveLocations -> Save
     await prisma.syncLog.deleteMany({
       where: {
-        id: { in: syncLogs.map((log) => log.id) },
+        saveId: save.id,
+      },
+    })
+
+    await prisma.saveVersion.deleteMany({
+      where: {
+        saveId: save.id,
+      },
+    })
+
+    await prisma.saveLocation.deleteMany({
+      where: {
+        saveId: save.id,
+      },
+    })
+
+    await prisma.save.delete({
+      where: {
+        id: save.id,
       },
     })
 
     return successResponse({
       message: 'Save file deleted successfully',
-      deletedCount: syncLogs.length,
+      deletedCount: save.versions.length,
     })
   } catch (error) {
     console.error('Delete save error:', error)

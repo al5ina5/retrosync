@@ -19,6 +19,7 @@ export async function GET(request: NextRequest) {
     })
     if (!device) return unauthorizedResponse('Invalid API key')
 
+    // Get saves that this device knows about (has SaveLocation)
     const locations = await prisma.saveLocation.findMany({
       where: {
         deviceId: device.id,
@@ -36,6 +37,29 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { updatedAt: 'desc' },
     })
+
+    // MVP: Also include saves from other devices that this device doesn't know about yet
+    // This allows the client to show "Run game once to enable syncing" messages
+    const allUserSaves = await prisma.save.findMany({
+      where: {
+        userId: device.userId,
+      },
+      include: {
+        versions: {
+          orderBy: [{ uploadedAt: 'desc' }],
+        },
+        locations: {
+          where: {
+            deviceId: device.id,
+          },
+        },
+      },
+    })
+
+    // Find saves that don't have a SaveLocation for this device
+    const unmappedSaves = allUserSaves.filter(
+      (save) => save.locations.length === 0
+    )
 
     // If a device has multiple locations for the same save (e.g., different cores),
     // pick the one with the latest version. Group by saveId first.
@@ -165,6 +189,7 @@ export async function GET(request: NextRequest) {
         displayName: loc.save.displayName,
         localPath: loc.localPath,
         deviceType: loc.deviceType,
+        needsMapping: false, // This device knows where to save this file
         latestVersion: latest
           ? {
             id: latest.id,
@@ -179,10 +204,69 @@ export async function GET(request: NextRequest) {
       }
     })
 
+    // Add unmapped saves (from other devices) to manifest
+    // These will be shown to the user with a message to run the game once
+    const unmappedManifest = unmappedSaves.map((save) => {
+      // Get latest version for this save
+      const versions = save.versions.map((v) => {
+        const localMs = v.localModifiedAt.getTime()
+        const uploadMs = v.uploadedAt.getTime()
+        const diff = Math.abs(uploadMs - localMs)
+        const hasRealMtime = diff > 5000
+        return {
+          version: v,
+          hasRealMtime,
+          localModifiedAt: v.localModifiedAt,
+          uploadedAt: v.uploadedAt,
+          localMs,
+          uploadMs,
+        }
+      })
+
+      versions.sort((a, b) => {
+        if (a.hasRealMtime !== b.hasRealMtime) {
+          return a.hasRealMtime ? -1 : 1
+        }
+        const aTime = a.localModifiedAt.getTime()
+        const bTime = b.localModifiedAt.getTime()
+        if (aTime !== bTime) {
+          return bTime - aTime
+        }
+        return b.uploadedAt.getTime() - a.uploadedAt.getTime()
+      })
+
+      const latest = versions[0]?.version
+
+      return {
+        saveId: save.id,
+        saveKey: save.saveKey,
+        displayName: save.displayName,
+        localPath: null, // No path yet - device needs to upload first
+        deviceType: device.deviceType,
+        needsMapping: true, // Device needs to run game once to enable syncing
+        latestVersion: latest
+          ? {
+            id: latest.id,
+            contentHash: latest.contentHash,
+            byteSize: latest.byteSize,
+            localModifiedAt: latest.localModifiedAt,
+            localModifiedAtMs: latest.localModifiedAt.getTime(),
+            uploadedAt: latest.uploadedAt,
+            uploadedAtMs: latest.uploadedAt.getTime(),
+          }
+          : null,
+      }
+    })
+
+    // Combine mapped and unmapped saves
+    const fullManifest = [...manifest, ...unmappedManifest]
+
     return successResponse({
       device: { id: device.id, deviceType: device.deviceType },
-      manifest,
-      count: manifest.length,
+      manifest: fullManifest,
+      count: fullManifest.length,
+      mappedCount: manifest.length,
+      unmappedCount: unmappedManifest.length,
     })
   } catch (err) {
     console.error('Manifest error:', err)
