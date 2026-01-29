@@ -2833,15 +2833,11 @@ function findSaveFiles()
     -- Use shell to find save files (LOVE2D filesystem is sandboxed)
     -- Only battery saves (.sav/.srm), no .bak files, no save states
     local locations = {
-        -- SpruceOS / Onion-style (check both uppercase and lowercase variants)
-        "/mnt/SDCARD/Saves/saves",
+        -- SpruceOS / Onion-style (lowercase only to match watcher paths)
         "/mnt/sdcard/Saves/saves",
 
         -- muOS common roots (in-game saves)
-        "/SD1 (mmc)/MUOS/save/file",
-        "/MUOS/save/file",
         "/mnt/mmc/MUOS/save/file",
-        "/mnt/sdcard/MUOS/save/file",
     }
 
     -- macOS OpenEmu battery saves (desktop usage)
