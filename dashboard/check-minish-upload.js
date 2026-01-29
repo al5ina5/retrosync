@@ -58,10 +58,10 @@ async function checkMinishUpload() {
     console.log(`Created: ${save.createdAt.toISOString()}`)
     console.log(`Updated: ${save.updatedAt.toISOString()}`)
 
-    console.log(`\nLocations (${save.locations.length}):`)
+    console.log(`\nSync: ${save.syncStrategy ?? 'shared'} (shared = one version for all; per_device = each device has its own)`)
+    console.log(`Locations (${save.locations.length}):`)
     save.locations.forEach((loc) => {
       console.log(`  - ${loc.device.name}: ${loc.localPath}`)
-      console.log(`    Sync Enabled: ${loc.syncEnabled}`)
     })
 
     console.log(`\nVersions (${save.versions.length}):`)

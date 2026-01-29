@@ -35,16 +35,13 @@ export async function GET(request: NextRequest) {
     }
 
     // Get saves that this device knows about (has SaveLocation)
-    const locations = await prisma.saveLocation.findMany({
-      where: {
-        deviceId: device.id,
-        syncEnabled: true, // Only include saves where sync is enabled
-      },
+    // Only "shared" saves are in the manifest (one version syncs to all); "per_device" = each device has its own, no download
+    const locationsRaw = await prisma.saveLocation.findMany({
+      where: { deviceId: device.id },
       include: {
         save: {
           include: {
             versions: {
-              // Get all versions, we'll sort in code to prefer real mtimes
               orderBy: [{ uploadedAt: 'desc' }],
             },
           },
@@ -52,28 +49,19 @@ export async function GET(request: NextRequest) {
       },
       orderBy: { updatedAt: 'desc' },
     })
+    const locations = locationsRaw.filter((loc) => loc.save.syncStrategy === 'shared')
 
-    // MVP: Also include saves from other devices that this device doesn't know about yet
-    // This allows the client to show "Run game once to enable syncing" messages
+    // Include unmapped saves (from other devices) so client can show "Run game once to enable syncing"
+    // Only include unmapped saves that are shared (per_device saves aren't offered for download)
     const allUserSaves = await prisma.save.findMany({
-      where: {
-        userId: device.userId,
-      },
+      where: { userId: device.userId },
       include: {
-        versions: {
-          orderBy: [{ uploadedAt: 'desc' }],
-        },
-        locations: {
-          where: {
-            deviceId: device.id,
-          },
-        },
+        versions: { orderBy: [{ uploadedAt: 'desc' }] },
+        locations: { where: { deviceId: device.id } },
       },
     })
-
-    // Find saves that don't have a SaveLocation for this device
     const unmappedSaves = allUserSaves.filter(
-      (save) => save.locations.length === 0
+      (save) => save.locations.length === 0 && save.syncStrategy === 'shared'
     )
 
     // Include ALL locations for each save (different emulator folders should all be tracked)

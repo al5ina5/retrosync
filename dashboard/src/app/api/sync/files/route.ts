@@ -218,7 +218,7 @@ export async function POST(request: NextRequest) {
         // Ensure per-device-per-path mapping exists
         // Now supports multiple paths per device (e.g., different cores for same game)
         // IMPORTANT: Only set localPath on CREATE, never UPDATE (preserve original path)
-        const saveLocation = await prisma.saveLocation.upsert({
+        await prisma.saveLocation.upsert({
           where: {
             saveId_deviceId_localPath: {
               saveId: save.id,
@@ -231,23 +231,12 @@ export async function POST(request: NextRequest) {
             deviceId: device.id,
             deviceType: device.deviceType,
             localPath: effectiveLocalPath,
-            syncEnabled: true, // Default to enabled for new locations
           },
           update: {
             deviceType: device.deviceType,
             // DO NOT update localPath - preserve the original path for this device
           },
         })
-
-        // Check if sync is disabled for this save on this device
-        if (!saveLocation.syncEnabled) {
-          console.log(`[Upload] Skipping upload for ${normalizedSaveKey} - sync disabled for device ${device.id}`)
-          return successResponse({
-            message: 'Upload skipped - sync disabled for this save',
-            skipped: true,
-            saveId: save.id,
-          })
-        }
 
         // Check if ANY version (across all devices) already has this exact content hash
         // This prevents duplicate S3 uploads when the same file is uploaded from different paths

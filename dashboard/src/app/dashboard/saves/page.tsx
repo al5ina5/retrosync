@@ -6,13 +6,14 @@ import Link from 'next/link'
 import useSWR, { mutate } from 'swr'
 import { fetcher } from '@/lib/utils'
 
+type SyncStrategy = 'shared' | 'per_device'
+
 interface SaveLocation {
   id: string
   deviceId: string
   deviceName: string
   deviceType: string
   localPath: string
-  syncEnabled: boolean
   isLatest: boolean
   latestModifiedAt: string | null
   modifiedAt: string | null
@@ -26,6 +27,7 @@ interface Save {
   fileSize: number
   uploadedAt: string
   lastModifiedAt: string
+  syncStrategy: SyncStrategy
   locations: SaveLocation[]
   latestVersionDevice: {
     id: string
@@ -79,7 +81,7 @@ export default function SavesPage() {
   const [deleting, setDeleting] = useState<string | null>(null)
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null)
   const [downloading, setDownloading] = useState<string | null>(null)
-  const [toggling, setToggling] = useState<string | null>(null) // saveLocationId being toggled
+  const [strategyUpdating, setStrategyUpdating] = useState<string | null>(null) // saveId being updated
 
   // Check authentication
   useEffect(() => {
@@ -269,35 +271,31 @@ export default function SavesPage() {
     }
   }
 
-  const handleToggleSync = async (saveLocationId: string, currentValue: boolean) => {
-    setToggling(saveLocationId)
+  const handleSetSyncStrategy = async (saveId: string, syncStrategy: SyncStrategy) => {
+    setStrategyUpdating(saveId)
     try {
       const token = localStorage.getItem('token')
-      const res = await fetch('/api/saves/toggle-sync', {
+      const res = await fetch('/api/saves/set-sync-strategy', {
         method: 'PATCH',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          Authorization: `Bearer ${token}`,
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({
-          saveLocationId,
-          syncEnabled: !currentValue,
-        }),
+        body: JSON.stringify({ saveId, syncStrategy }),
       })
 
       const body = await res.json()
       if (!res.ok || !body?.success) {
-        setError(body?.error || 'Failed to toggle sync')
+        setError(body?.error || 'Failed to set sync strategy')
         return
       }
 
-      // Revalidate saves list
       mutate('/api/saves')
       setError('')
     } catch (err) {
-      setError('Failed to toggle sync')
+      setError('Failed to set sync strategy')
     } finally {
-      setToggling(null)
+      setStrategyUpdating(null)
     }
   }
 
@@ -387,6 +385,44 @@ export default function SavesPage() {
                           </>
                         )}
                       </p>
+                      {/* One sync option per game: shared (one version for all) vs per_device (each device has its own, all backed up) */}
+                      <div className="flex items-center gap-2 mt-2">
+                        <span className="text-xs text-vercel-gray-400">Sync:</span>
+                        <div
+                          className="inline-flex rounded-md border border-vercel-gray-700 bg-vercel-gray-900 p-0.5"
+                          role="group"
+                          aria-label="Sync strategy"
+                        >
+                          {(
+                            [
+                              { value: 'shared' as const, label: 'Sync across devices' },
+                              { value: 'per_device' as const, label: 'Each device has its own' },
+                            ] as const
+                          ).map(({ value, label }) => {
+                            const isSelected = (save.syncStrategy || 'shared') === value
+                            const isDisabled = strategyUpdating === save.id
+                            return (
+                              <button
+                                key={value}
+                                type="button"
+                                onClick={() => handleSetSyncStrategy(save.id, value)}
+                                disabled={isDisabled}
+                                title={
+                                  value === 'shared'
+                                    ? 'One version syncs to all devices (latest wins)'
+                                    : 'Each device keeps its own version; all backed up, no cross-device sync'
+                                }
+                                className={`rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
+                                    ? 'bg-vercel-blue-600 text-white'
+                                    : 'text-vercel-gray-300 hover:bg-vercel-gray-800 hover:text-vercel-white'
+                                  }`}
+                              >
+                                {label}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
                     </div>
                     <div className="text-right ml-4 flex flex-col items-end gap-2">
                       {save.latestVersionDevice && (
@@ -518,20 +554,6 @@ export default function SavesPage() {
                                     )}
                                   </p>
                                 )}
-                            </div>
-                            <div className="ml-4 flex items-center gap-3">
-                              <label className="flex items-center gap-2 cursor-pointer">
-                                <input
-                                  type="checkbox"
-                                  checked={location.syncEnabled}
-                                  onChange={() => handleToggleSync(location.id, location.syncEnabled)}
-                                  disabled={toggling === location.id}
-                                  className="w-4 h-4 rounded border-vercel-gray-600 bg-vercel-gray-800 text-vercel-blue-600 focus:ring-2 focus:ring-vercel-blue-500 focus:ring-offset-2 focus:ring-offset-vercel-black disabled:opacity-50 disabled:cursor-not-allowed"
-                                />
-                                <span className="text-xs text-vercel-gray-300">
-                                  {location.syncEnabled ? 'Sync enabled' : 'Sync disabled'}
-                                </span>
-                              </label>
                             </div>
                           </div>
                         )

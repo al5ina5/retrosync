@@ -129,6 +129,7 @@ export async function GET(request: NextRequest) {
         fileSize: latestVersion?.byteSize || 0,
         lastModifiedAt: sanitizedLocalModifiedAt,
         uploadedAt: latestVersion?.uploadedAt || save.updatedAt,
+        syncStrategy: save.syncStrategy,
         locations: save.locations.map((loc) => {
           const latestForDevice = latestByDevice.get(loc.deviceId) || null
 
@@ -138,7 +139,6 @@ export async function GET(request: NextRequest) {
             deviceName: loc.device.name,
             deviceType: loc.device.deviceType,
             localPath: loc.localPath,
-            syncEnabled: loc.syncEnabled,
             isLatest: loc.deviceId === latestDeviceId,
             latestModifiedAt: loc.deviceId === latestDeviceId ? sanitizedLocalModifiedAt : null,
             modifiedAt: latestForDevice?.modifiedAt || null,

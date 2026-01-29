@@ -1646,14 +1646,12 @@ function fetchSavesList()
                 -- Name: prefer displayName, then saveKey
                 local name = save.displayName or save.saveKey or "Unknown"
 
-                -- Collect where this game is synced (any device with syncEnabled = true)
+                -- Collect devices that have this game (all locations; sync is per-save now)
                 local syncedDevices = {}
                 if save.locations then
                     for _, loc in ipairs(save.locations) do
-                        if loc.syncEnabled then
-                            local dname = loc.deviceName or loc.deviceType or "Device"
-                            table.insert(syncedDevices, dname)
-                        end
+                        local dname = loc.deviceName or loc.deviceType or "Device"
+                        table.insert(syncedDevices, dname)
                     end
                 end
 
@@ -1677,16 +1675,19 @@ function fetchSavesList()
                 local pendingDir = nil  -- "UP" or "DOWN"
                 local deviceLocalPath = nil
 
+                -- Per-save sync strategy: "shared" = one version for all; "per_device" = each device has its own, all backed up
                 if currentDeviceId and save.locations then
                     for _, loc in ipairs(save.locations) do
                         if loc.deviceId == currentDeviceId then
                             deviceLocalPath = loc.localPath
-                            if loc.syncEnabled then
+                            local strategy = save.syncStrategy or "shared"
+                            if strategy == "shared" then
                                 status = "SYNCED"
                                 statusColor = GREEN
                             else
-                                status = "DISABLED"
-                                statusColor = RED
+                                -- per_device: each device has its own version, all backed up
+                                status = "PER DEVICE"
+                                statusColor = YELLOW
                             end
                             break
                         end

@@ -84,16 +84,18 @@ model SyncLog {
 }
 
 model Save {
-  id          String         @id @default(uuid())
-  userId      String
-  saveKey     String
-  displayName String
-  createdAt   DateTime       @default(now())
-  updatedAt   DateTime       @updatedAt
-  user        User           @relation(fields: [userId], references: [id], onDelete: Cascade)
-  locations   SaveLocation[]
-  versions    SaveVersion[]
-  syncLogs    SyncLog[]
+  id           String         @id @default(uuid())
+  userId       String
+  saveKey      String
+  displayName  String
+  /// "shared" = one version syncs to all devices (latest wins); "per_device" = each device has its own, all backed up
+  syncStrategy String   @default("shared")
+  createdAt    DateTime       @default(now())
+  updatedAt    DateTime       @updatedAt
+  user         User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  locations    SaveLocation[]
+  versions     SaveVersion[]
+  syncLogs     SyncLog[]
 
   @@unique([userId, saveKey])
   @@index([userId])
@@ -125,7 +127,6 @@ model SaveLocation {
   deviceId    String
   deviceType  String
   localPath   String
-  syncEnabled Boolean  @default(true)
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)

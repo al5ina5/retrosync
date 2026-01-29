@@ -22,6 +22,7 @@ async function main() {
     console.log('id:', save.id);
     console.log('saveKey:', save.saveKey);
     console.log('displayName:', save.displayName);
+    console.log('syncStrategy:', save.syncStrategy ?? 'shared');
     console.log('Locations:');
     for (const loc of save.locations) {
       console.log(
@@ -30,9 +31,7 @@ async function main() {
         'type:',
         loc.device.deviceType,
         'path:',
-        loc.localPath,
-        'syncEnabled:',
-        loc.syncEnabled
+        loc.localPath
       );
     }
     console.log('Latest versions:');
