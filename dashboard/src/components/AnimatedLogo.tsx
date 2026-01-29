@@ -77,7 +77,7 @@ export default function AnimatedLogo({ className = '', delay = 0, duration = 1.2
           if (charT > 0) {
             // Ease + overshoot for slam, then slight sway
             const eased = charT * charT * (3 - 2 * charT)
-            const overshoot = Math.sin(eased * Math.pi) * 8
+            const overshoot = Math.sin(eased * Math.PI) * 8
             yOffset = -(1 - eased) * 80 + overshoot
             opacity = 1
           }

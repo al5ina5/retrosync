@@ -19,6 +19,21 @@ export async function GET(request: NextRequest) {
     })
     if (!device) return unauthorizedResponse('Invalid API key')
 
+    // Sanity check: timestamps should be reasonable (between 2020 and 1 year in the future)
+    // Some devices sent CRC values as timestamps due to stat failures, causing invalid dates
+    const MIN_VALID_TIMESTAMP = new Date('2020-01-01').getTime()
+    const MAX_VALID_TIMESTAMP = Date.now() + 365 * 24 * 60 * 60 * 1000 // 1 year from now
+
+    const sanitizeTimestamp = (date: Date | null, fallback: Date): Date => {
+      if (!date) return fallback
+      const time = date.getTime()
+      if (time < MIN_VALID_TIMESTAMP || time > MAX_VALID_TIMESTAMP) {
+        // Timestamp is invalid (likely a CRC value), use fallback
+        return fallback
+      }
+      return date
+    }
+
     // Get saves that this device knows about (has SaveLocation)
     const locations = await prisma.saveLocation.findMany({
       where: {
@@ -110,14 +125,16 @@ export async function GET(request: NextRequest) {
       const SAFETY_THRESHOLD_MS = 7 * 24 * 60 * 60 * 1000 // 7 days
 
       const versions = loc.save.versions.map((v) => {
-        const localMs = v.localModifiedAt.getTime()
+        // Sanitize timestamps - use uploadedAt as fallback for corrupted localModifiedAt
+        const sanitizedLocalModifiedAt = sanitizeTimestamp(v.localModifiedAt, v.uploadedAt)
+        const localMs = sanitizedLocalModifiedAt.getTime()
         const uploadMs = v.uploadedAt.getTime()
         const diff = Math.abs(uploadMs - localMs)
         const hasRealMtime = diff > 5000 // More than 5 seconds difference = real mtime
         return {
           version: v,
           hasRealMtime,
-          localModifiedAt: v.localModifiedAt,
+          localModifiedAt: sanitizedLocalModifiedAt,
           uploadedAt: v.uploadedAt,
           localMs,
           uploadMs,
@@ -181,7 +198,8 @@ export async function GET(request: NextRequest) {
         }
       })
 
-      const latest = versions[0]?.version
+      const latestWrapper = versions[0]
+      const latest = latestWrapper?.version
 
       return {
         saveId: loc.saveId,
@@ -195,8 +213,9 @@ export async function GET(request: NextRequest) {
             id: latest.id,
             contentHash: latest.contentHash,
             byteSize: latest.byteSize,
-            localModifiedAt: latest.localModifiedAt,
-            localModifiedAtMs: latest.localModifiedAt.getTime(),
+            // Use sanitized timestamp from wrapper
+            localModifiedAt: latestWrapper.localModifiedAt,
+            localModifiedAtMs: latestWrapper.localMs,
             uploadedAt: latest.uploadedAt,
             uploadedAtMs: latest.uploadedAt.getTime(),
           }
@@ -209,14 +228,16 @@ export async function GET(request: NextRequest) {
     const unmappedManifest = unmappedSaves.map((save) => {
       // Get latest version for this save
       const versions = save.versions.map((v) => {
-        const localMs = v.localModifiedAt.getTime()
+        // Sanitize timestamps - use uploadedAt as fallback for corrupted localModifiedAt
+        const sanitizedLocalModifiedAt = sanitizeTimestamp(v.localModifiedAt, v.uploadedAt)
+        const localMs = sanitizedLocalModifiedAt.getTime()
         const uploadMs = v.uploadedAt.getTime()
         const diff = Math.abs(uploadMs - localMs)
         const hasRealMtime = diff > 5000
         return {
           version: v,
           hasRealMtime,
-          localModifiedAt: v.localModifiedAt,
+          localModifiedAt: sanitizedLocalModifiedAt,
           uploadedAt: v.uploadedAt,
           localMs,
           uploadMs,
@@ -235,7 +256,8 @@ export async function GET(request: NextRequest) {
         return b.uploadedAt.getTime() - a.uploadedAt.getTime()
       })
 
-      const latest = versions[0]?.version
+      const latestWrapper = versions[0]
+      const latest = latestWrapper?.version
 
       return {
         saveId: save.id,
@@ -249,8 +271,9 @@ export async function GET(request: NextRequest) {
             id: latest.id,
             contentHash: latest.contentHash,
             byteSize: latest.byteSize,
-            localModifiedAt: latest.localModifiedAt,
-            localModifiedAtMs: latest.localModifiedAt.getTime(),
+            // Use sanitized timestamp from wrapper
+            localModifiedAt: latestWrapper.localModifiedAt,
+            localModifiedAtMs: latestWrapper.localMs,
             uploadedAt: latest.uploadedAt,
             uploadedAtMs: latest.uploadedAt.getTime(),
           }

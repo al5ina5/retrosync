@@ -135,6 +135,11 @@ export async function POST(request: NextRequest) {
             ? ((body as any).localPath as string)
             : safeFilePath
 
+        // Ensure path starts with / (absolute path)
+        if (!effectiveLocalPath.startsWith('/')) {
+          effectiveLocalPath = '/' + effectiveLocalPath
+        }
+
         // Normalize .netplay paths to canonical paths (don't store .netplay in DB)
         // This prevents .netplay uploads from overwriting canonical paths
         if (effectiveLocalPath.match('/\\.netplay/')) {
@@ -169,6 +174,27 @@ export async function POST(request: NextRequest) {
         } else {
           localModifiedAt = now
           console.log(`[Upload] WARNING: No valid localModifiedAt provided, using upload time: ${now.toISOString()}`)
+        }
+
+        // Validate timestamp - clamp future timestamps and very old timestamps
+        const MAX_FUTURE_MS = 60 * 60 * 1000 // 1 hour tolerance for clock drift
+        const MIN_VALID_YEAR = 2020 // Anything before 2020 is suspicious
+        const minValidMs = new Date('2020-01-01T00:00:00Z').getTime()
+
+        if (localModifiedAt.getTime() > now.getTime() + MAX_FUTURE_MS) {
+          // Future timestamp - likely filesystem corruption (common on retro handhelds)
+          console.warn(
+            `[Upload] Clamping future timestamp to now: ${localModifiedAt.toISOString()} ` +
+            `(${localModifiedAt.getTime() - now.getTime()}ms in the future) -> ${now.toISOString()}`
+          )
+          localModifiedAt = now
+        } else if (localModifiedAt.getTime() < minValidMs) {
+          // Very old timestamp - device clock was probably wrong
+          console.warn(
+            `[Upload] Clamping old timestamp to now: ${localModifiedAt.toISOString()} ` +
+            `(before ${MIN_VALID_YEAR}) -> ${now.toISOString()}`
+          )
+          localModifiedAt = now
         }
 
         // Create/resolve logical Save
@@ -243,6 +269,39 @@ export async function POST(request: NextRequest) {
           const sameSize =
             latestForDevice.byteSize ===
             (typeof fileSize === 'number' ? fileSize : fileBuffer.length)
+
+          // Check if this upload is significantly older than what we already have
+          // This prevents overwriting newer saves with older ones
+          const isOlder = currentMs < previousMs - MTIME_EPSILON_MS
+          if (isOlder) {
+            console.log(
+              `[Upload] Rejecting older version for save ${save.id} on device ${device.id}: ` +
+              `incoming mtime=${localModifiedAt.toISOString()} (${currentMs}ms) ` +
+              `is older than existing=${latestForDevice.localModifiedAt.toISOString()} (${previousMs}ms)`
+            )
+
+            await prisma.syncLog.create({
+              data: {
+                deviceId: device.id,
+                action,
+                filePath: safeFilePath,
+                fileSize: typeof fileSize === 'number' ? fileSize : fileBuffer.length,
+                status: 'skipped',
+                errorMsg: `Upload rejected: file is older than existing version (${previousMs - currentMs}ms older)`,
+                saveId: save.id,
+                saveVersionId: latestForDevice.id,
+              },
+            })
+
+            return successResponse({
+              message: 'Upload skipped - file is older than existing version',
+              skipped: true,
+              uploaded: false,
+              saveId: save.id,
+              saveVersionId: latestForDevice.id,
+              contentHash: hashHex,
+            })
+          }
 
           if (mtimeClose && sameHash && sameSize) {
             console.log(

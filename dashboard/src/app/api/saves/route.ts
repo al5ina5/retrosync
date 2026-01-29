@@ -73,11 +73,31 @@ export async function GET(request: NextRequest) {
       orderBy: { updatedAt: 'desc' },
     })
 
+    // Sanity check: timestamps should be reasonable (between 2020 and 1 year in the future)
+    // Some devices send CRC values as timestamps due to stat failures, causing dates like 2055+
+    const MIN_VALID_TIMESTAMP = new Date('2020-01-01').getTime()
+    const MAX_VALID_TIMESTAMP = Date.now() + 365 * 24 * 60 * 60 * 1000 // 1 year from now
+
+    const sanitizeTimestamp = (date: Date | null, fallback: Date): Date => {
+      if (!date) return fallback
+      const time = date.getTime()
+      if (time < MIN_VALID_TIMESTAMP || time > MAX_VALID_TIMESTAMP) {
+        // Timestamp is invalid (likely a CRC value), use fallback
+        return fallback
+      }
+      return date
+    }
+
     // Format saves for the UI
     const formattedSaves = saves.map((save) => {
       const latestVersion = save.versions[0]
       const latestDeviceId = latestVersion?.device?.id || null
-      const latestLocalModifiedAt = latestVersion?.localModifiedAt || null
+
+      // Sanitize the latest version's timestamp
+      const fallbackDate = latestVersion?.uploadedAt || save.updatedAt
+      const sanitizedLocalModifiedAt = latestVersion
+        ? sanitizeTimestamp(latestVersion.localModifiedAt, fallbackDate)
+        : fallbackDate
 
       // Build a per-device view of latest version timestamps so we can
       // show both modified and uploaded times for each location in the UI.
@@ -91,14 +111,13 @@ export async function GET(request: NextRequest) {
 
       for (const version of save.versions) {
         const existing = latestByDevice.get(version.deviceId)
-        const candidateModifiedAt = version.localModifiedAt || version.uploadedAt
+        const versionUploadedAt = version.uploadedAt || save.updatedAt
+        const sanitizedModifiedAt = sanitizeTimestamp(version.localModifiedAt, versionUploadedAt)
 
-        if (!candidateModifiedAt) continue
-
-        if (!existing || candidateModifiedAt.getTime() > existing.modifiedAt.getTime()) {
+        if (!existing || sanitizedModifiedAt.getTime() > existing.modifiedAt.getTime()) {
           latestByDevice.set(version.deviceId, {
-            modifiedAt: candidateModifiedAt,
-            uploadedAt: version.uploadedAt || candidateModifiedAt,
+            modifiedAt: sanitizedModifiedAt,
+            uploadedAt: versionUploadedAt,
           })
         }
       }
@@ -108,7 +127,7 @@ export async function GET(request: NextRequest) {
         saveKey: save.saveKey,
         displayName: save.displayName,
         fileSize: latestVersion?.byteSize || 0,
-        lastModifiedAt: latestVersion?.localModifiedAt || save.updatedAt,
+        lastModifiedAt: sanitizedLocalModifiedAt,
         uploadedAt: latestVersion?.uploadedAt || save.updatedAt,
         locations: save.locations.map((loc) => {
           const latestForDevice = latestByDevice.get(loc.deviceId) || null
@@ -121,7 +140,7 @@ export async function GET(request: NextRequest) {
             localPath: loc.localPath,
             syncEnabled: loc.syncEnabled,
             isLatest: loc.deviceId === latestDeviceId,
-            latestModifiedAt: loc.deviceId === latestDeviceId ? latestLocalModifiedAt : null,
+            latestModifiedAt: loc.deviceId === latestDeviceId ? sanitizedLocalModifiedAt : null,
             modifiedAt: latestForDevice?.modifiedAt || null,
             uploadedAt: latestForDevice?.uploadedAt || null,
           }
@@ -136,10 +155,11 @@ export async function GET(request: NextRequest) {
       }
     })
 
-    // Sort by real mtime (lastModifiedAt) descending - most recently modified first
+    // Sort by uploadedAt descending (most recently uploaded first)
+    // This is more reliable than lastModifiedAt since upload timestamps are always accurate
     formattedSaves.sort((a, b) => {
-      const timeA = new Date(a.lastModifiedAt).getTime()
-      const timeB = new Date(b.lastModifiedAt).getTime()
+      const timeA = new Date(a.uploadedAt).getTime()
+      const timeB = new Date(b.uploadedAt).getTime()
       return timeB - timeA
     })
 

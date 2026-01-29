@@ -104,15 +104,31 @@ export default function SavesPage() {
 
   const saves = data?.saves || []
 
+  // Sanity check: timestamps should be reasonable (between 2020 and 1 year in the future)
+  // Some devices send CRC values as timestamps due to stat failures, causing dates like 2055+
+  const MIN_VALID_YEAR = 2020
+  const MAX_VALID_YEAR = new Date().getFullYear() + 1
+
+  const isValidTimestamp = (dt: Date): boolean => {
+    const year = dt.getFullYear()
+    return year >= MIN_VALID_YEAR && year <= MAX_VALID_YEAR
+  }
+
   const formatShortDateTime = (isoString: string): string => {
     const dt = new Date(isoString)
     if (Number.isNaN(dt.getTime())) return ''
 
-    // Example output: "12/3/24 12:26 PM"
+    // If timestamp is invalid (e.g., year 2055 from corrupted data), show "Unknown"
+    if (!isValidTimestamp(dt)) {
+      return 'Unknown'
+    }
+
+    // Example output: "12/3/2024 12:26 PM"
+    // Using 4-digit year to avoid confusion with corrupted timestamps (e.g., 2102 showing as "02")
     const formatted = new Intl.DateTimeFormat('en-US', {
       month: 'numeric',
       day: 'numeric',
-      year: '2-digit',
+      year: 'numeric',
       hour: 'numeric',
       minute: '2-digit',
       hour12: true,
@@ -120,6 +136,45 @@ export default function SavesPage() {
 
     // Remove the default comma between date and time for a tighter layout
     return formatted.replace(',', '')
+  }
+
+  const formatRelativeOrShort = (isoString: string): string => {
+    const dt = new Date(isoString)
+    if (Number.isNaN(dt.getTime())) return ''
+
+    // If timestamp is invalid, return "Unknown"
+    if (!isValidTimestamp(dt)) {
+      return 'Unknown'
+    }
+
+    const now = new Date()
+    const diffMs = now.getTime() - dt.getTime()
+
+    // If somehow the timestamp is in the future, show "just now"
+    if (diffMs < 0) {
+      return 'just now'
+    }
+
+    const diffSeconds = Math.floor(diffMs / 1000)
+    const diffMinutes = Math.floor(diffSeconds / 60)
+    const diffHours = Math.floor(diffMinutes / 60)
+
+    if (diffSeconds < 60) {
+      return 'just now'
+    }
+
+    if (diffMinutes < 60) {
+      const roundedMinutes = Math.max(1, diffMinutes)
+      return `about ${roundedMinutes} minute${roundedMinutes === 1 ? '' : 's'} ago`
+    }
+
+    if (diffHours < 24) {
+      const roundedHours = Math.max(1, diffHours)
+      return `about ${roundedHours} hour${roundedHours === 1 ? '' : 's'} ago`
+    }
+
+    // 24+ hours ago, show the compact absolute date/time
+    return formatShortDateTime(isoString)
   }
 
   const formatFileSize = (bytes: number): string => {
@@ -328,7 +383,7 @@ export default function SavesPage() {
                         {save.uploadedAt && (
                           <>
                             {' '}
-                            • <span>Uploaded: {formatShortDateTime(save.uploadedAt)}</span>
+                            • <span>Uploaded: {formatRelativeOrShort(save.uploadedAt)}</span>
                           </>
                         )}
                       </p>
@@ -458,7 +513,7 @@ export default function SavesPage() {
                                     {location.uploadedAt && (
                                       <>
                                         {' '}
-                                        • Uploaded: {formatShortDateTime(location.uploadedAt)}
+                                        • Uploaded: {formatRelativeOrShort(location.uploadedAt)}
                                       </>
                                     )}
                                   </p>

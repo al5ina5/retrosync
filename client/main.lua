@@ -43,6 +43,12 @@ local DEVICE_NAME_FILE = DATA_DIR .. "/device_name"
 local CODE_FILE = DATA_DIR .. "/code"
 local LOG_FILE = DATA_DIR .. "/debug.log"
 local SERVER_URL_FILE = DATA_DIR .. "/server_url"
+local HISTORY_FILE = DATA_DIR .. "/device_history.json"
+
+-- Optional background process helper scripts (run from SETTINGS screen)
+-- Drop these scripts next to the app (.love) or in the app directory.
+local INSTALL_BG_SCRIPT = APP_DIR .. "/install-background-process.sh"
+local UNINSTALL_BG_SCRIPT = APP_DIR .. "/uninstall-background-process.sh"
 
 -- States
 local STATE_SHOWING_CODE = 1
@@ -51,6 +57,8 @@ local STATE_UPLOADING = 3
 local STATE_SUCCESS = 4
 local STATE_SHOWING_FILES = 5
 local STATE_DOWNLOADING = 6
+local STATE_SETTINGS = 7
+local STATE_DEVICE_HISTORY = 8
 
 -- App state
 local currentState = STATE_SHOWING_CODE
@@ -96,7 +104,17 @@ local filesListError = ""  -- Error message for files list
 local filesListPending = false  -- Flag to defer API call to next frame (so screen renders first)
 
 -- Home menu selection (CONNECTED state)
-local homeSelectedIndex = 1  -- 1 = Sync, 2 = Recent
+-- 1 = Sync, 2 = Recent, 3 = Settings
+local homeSelectedIndex = 1
+
+-- Settings screen state
+local settingsSelectedIndex = 1  -- 1 = Reinstall BG process, 2 = Uninstall BG process, 3 = History
+local settingsStatusMessage = ""
+
+-- Per-device history state (THIS DEVICE ONLY)
+local deviceHistory = {}  -- newest-first array of { ts, direction, name, path, size, device }
+local historySelectedIndex = 1
+local historyScroll = 0
 
 -- Home intro animation (CONNECTED and SHOWING_CODE)
 local homeIntroTimer = 0
@@ -117,6 +135,25 @@ local titleFont = nil       -- General headings (Minecraft)
 local codeFont = nil        -- Primary UI text (Minecraft)
 local largeCountFont = nil  -- Big numbers (Minecraft)
 local deviceFont = nil      -- Small labels (Minecraft)
+
+-- Audio (all optional – will be nil if assets are missing)
+local bgMusic = nil                 -- Very soft 8‑bit / ambient loop
+local uiHoverSound = nil            -- Gentle tick when moving between menu items
+local uiSelectSound = nil           -- Soft confirm when activating an action
+local uiBackSound = nil             -- Soft whoosh when backing out / cancel
+local uiStartSyncSound = nil        -- Slight swell when starting sync
+
+-- Helper to safely load sounds without crashing if file is missing
+local function safeLoadSource(path, kind)
+    local ok, result = pcall(function()
+        return love.audio.newSource(path, kind or "static")
+    end)
+    if not ok then
+        print("WARN: Failed to load sound " .. tostring(path) .. ": " .. tostring(result))
+        return nil
+    end
+    return result
+end
 
 function love.load()
     -- Set up graphics
@@ -140,7 +177,45 @@ function love.load()
         largeCountFont = love.graphics.newFont(96)
         deviceFont = love.graphics.newFont(24)
     end
-    
+
+    ----------------------------------------------------------------
+    -- Very soft background music + UI sounds (all optional)
+    --
+    -- Expected files you can drop into assets/ (names are suggestions):
+    --   assets/music_tunnel.ogg       -- Tiny 8‑bit / ambient loop, "files flying in a tunnel"
+    --   assets/ui_hover.wav           -- Very soft hover tick
+    --   assets/ui_select.wav          -- Gentle confirm chime
+    --   assets/ui_back.wav            -- Soft back / cancel whoosh
+    --   assets/ui_start_sync.wav      -- Light swell when starting sync
+    ----------------------------------------------------------------
+    bgMusic = safeLoadSource("assets/music_tunnel.ogg", "stream")
+    if bgMusic then
+        bgMusic:setLooping(true)
+        -- Keep this very quiet so it feels soothing and non-intrusive
+        bgMusic:setVolume(0.22)
+        bgMusic:play()
+    end
+
+    uiHoverSound = safeLoadSource("assets/ui_hover.wav", "static")
+    if uiHoverSound then
+        uiHoverSound:setVolume(0.35)
+    end
+
+    uiSelectSound = safeLoadSource("assets/ui_select.wav", "static")
+    if uiSelectSound then
+        uiSelectSound:setVolume(0.38)
+    end
+
+    uiBackSound = safeLoadSource("assets/ui_back.wav", "static")
+    if uiBackSound then
+        uiBackSound:setVolume(0.35)
+    end
+
+    uiStartSyncSound = safeLoadSource("assets/ui_start_sync.wav", "static")
+    if uiStartSyncSound then
+        uiStartSyncSound:setVolume(0.40)
+    end
+
     -- Create data directory within app folder (with error handling)
     pcall(function()
         os.execute("mkdir -p '" .. DATA_DIR .. "' 2>/dev/null")
@@ -148,6 +223,8 @@ function love.load()
     
     -- Consolidate any existing log files into one
     consolidateLogs()
+    -- Load device-local history (if present)
+    loadDeviceHistory()
     
     -- Initialize logging
     logMessage("=== RetroSync App Started ===")
@@ -408,6 +485,7 @@ function love.draw()
         local gapButtonsToDevice = 64
 
         local optionHeight = 50
+        -- We now have three buttons (Sync, Recent, Settings)
         local groupHeight =
             titleHeight +
             gapTitleToButtons +
@@ -474,6 +552,7 @@ function love.draw()
         local alpha = buttonsT
         local optionY1 = groupTopY + titleHeight + gapTitleToButtons
         local optionY2 = optionY1 + optionHeight + gapButtons
+        local optionY3 = optionY2 + optionHeight + gapButtons
 
         -- Option 1: Sync
         if homeSelectedIndex == 1 then
@@ -495,9 +574,19 @@ function love.draw()
         love.graphics.setColor(1, 1, 1, alpha)
         love.graphics.printf("Recent", 0, optionY2 + 10, screenWidth, "center")
 
+        -- Option 3: Settings
+        if homeSelectedIndex == 3 then
+            love.graphics.setColor(0.9, 0.8, 0.3, alpha)
+        else
+            love.graphics.setColor(0.25, 0.23, 0.15, alpha)
+        end
+        love.graphics.rectangle("fill", optionX, optionY3, optionWidth, optionHeight, 10, 10)
+        love.graphics.setColor(1, 1, 1, alpha)
+        love.graphics.printf("Settings", 0, optionY3 + 10, screenWidth, "center")
+
         -- Device line below buttons, lower opacity and smaller font
         if deviceName then
-            local deviceY = optionY2 + optionHeight + gapButtonsToDevice
+            local deviceY = optionY3 + optionHeight + gapButtonsToDevice
             if deviceFont then
                 love.graphics.setFont(deviceFont)
             else
@@ -506,7 +595,7 @@ function love.draw()
             love.graphics.setColor(1, 1, 1, 0.5)
             love.graphics.printf("Device: " .. deviceName, 0, deviceY, screenWidth, "center")
         end
-        
+
     elseif currentState == STATE_SHOWING_FILES then
         -- Recent games list view
         love.graphics.setFont(titleFont)
@@ -606,6 +695,125 @@ function love.draw()
         end
         
         
+    elseif currentState == STATE_SETTINGS then
+        -- Simple text-based settings screen
+        love.graphics.setFont(titleFont)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("SETTINGS", 0, 40, screenWidth, "center")
+
+        love.graphics.setFont(codeFont)
+        local listStartY = 140
+        local lineHeight = 40
+
+        local options = {
+            "Reinstall background process",
+            "Uninstall background process",
+            "History (this device)"
+        }
+
+        for i, label in ipairs(options) do
+            local y = listStartY + (i - 1) * lineHeight
+            local isSelected = (i == settingsSelectedIndex)
+
+            if isSelected then
+                love.graphics.setColor(0.3, 0.6, 0.9)
+                love.graphics.rectangle("fill", 40, y - 4, screenWidth - 80, lineHeight - 4, 8, 8)
+                love.graphics.setColor(1, 1, 1)
+            else
+                love.graphics.setColor(0.2, 0.2, 0.2)
+                love.graphics.rectangle("line", 40, y - 4, screenWidth - 80, lineHeight - 4, 8, 8)
+                love.graphics.setColor(0.9, 0.9, 0.9)
+            end
+
+            love.graphics.printf(label, 60, y + 4, screenWidth - 120, "left")
+        end
+
+        -- Status / hint at bottom
+        love.graphics.setFont(deviceFont or codeFont)
+        love.graphics.setColor(1, 1, 1, 0.7)
+        local statusText = settingsStatusMessage ~= "" and settingsStatusMessage or "Use UP/DOWN, A/ENTER to select, B/ESC to go back"
+        love.graphics.printf(statusText, 20, screenHeight - 60, screenWidth - 40, "center")
+
+    elseif currentState == STATE_DEVICE_HISTORY then
+        -- Device-local history view (uploads/downloads from this device only)
+        love.graphics.setFont(titleFont)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.printf("HISTORY (THIS DEVICE)", 0, 20, screenWidth, "center")
+
+        if #deviceHistory == 0 then
+            love.graphics.setFont(codeFont)
+            love.graphics.setColor(0.6, 0.6, 0.6)
+            love.graphics.printf("No history yet", 0, 120, screenWidth, "center")
+        else
+            local listStartY = 120
+            local lineHeight = 32
+            local bottomMargin = 20
+            local maxVisibleLines = math.floor((screenHeight - listStartY - bottomMargin) / lineHeight)
+            local totalLines = #deviceHistory
+
+            -- Clamp selection
+            if historySelectedIndex < 1 then
+                historySelectedIndex = 1
+            elseif historySelectedIndex > totalLines then
+                historySelectedIndex = totalLines
+            end
+
+            -- Adjust scroll
+            if historySelectedIndex <= historyScroll then
+                historyScroll = historySelectedIndex - 1
+            elseif historySelectedIndex > historyScroll + maxVisibleLines then
+                historyScroll = historySelectedIndex - maxVisibleLines
+            end
+
+            local startIdx = math.max(1, historyScroll + 1)
+            local endIdx = math.min(totalLines, startIdx + maxVisibleLines - 1)
+
+            if totalLines > maxVisibleLines then
+                love.graphics.setFont(codeFont)
+                love.graphics.setColor(0.5, 0.5, 0.5)
+                love.graphics.printf("(" .. startIdx .. "-" .. endIdx .. " / " .. totalLines .. ")", 0, listStartY - 25, screenWidth, "center")
+            end
+
+            love.graphics.setFont(codeFont)
+            for i = startIdx, endIdx do
+                local entry = deviceHistory[i]
+                local y = listStartY + (i - startIdx) * lineHeight
+                local isSelected = (i == historySelectedIndex)
+
+                if isSelected then
+                    love.graphics.setColor(0.2, 0.4, 0.6)
+                    love.graphics.rectangle("fill", 10, y - 2, screenWidth - 20, lineHeight - 2, 5, 5)
+                    love.graphics.setColor(1, 1, 1)
+                else
+                    love.graphics.setColor(0.9, 0.9, 0.9)
+                end
+
+                local dir = (entry.direction == "upload") and "↑" or "↓"
+                local dirColor = (entry.direction == "upload") and {0.4, 1.0, 0.6} or {0.4, 0.7, 1.0}
+
+                local paddingLeft = 24
+                local paddingRight = 20
+                local midY = y + 2
+
+                -- File name (left)
+                local name = entry.name or "Unknown"
+                local maxNameW = (screenWidth - paddingLeft - paddingRight) * 0.6
+                name = truncateToWidth(name, maxNameW, codeFont)
+                love.graphics.setColor(1, 1, 1)
+                love.graphics.printf(name, paddingLeft, midY, maxNameW, "left")
+
+                -- Direction + relative time (right)
+                local relTime = formatHistoryTime(entry.ts)
+                local rightText = dir .. " " .. relTime
+                love.graphics.setColor(dirColor[1], dirColor[2], dirColor[3])
+                love.graphics.printf(rightText, paddingLeft, midY, screenWidth - paddingLeft - paddingRight, "right")
+            end
+        end
+
+        love.graphics.setFont(deviceFont or codeFont)
+        love.graphics.setColor(1, 1, 1, 0.7)
+        love.graphics.printf("UP/DOWN to scroll, B/ESC to go back", 20, screenHeight - 50, screenWidth - 40, "center")
+
     elseif currentState == STATE_UPLOADING or currentState == STATE_DOWNLOADING or currentState == STATE_SUCCESS then
         -- Unified sync screen: UPLOADED / DOWNLOADED with centered status text
         local leftX = screenWidth * 0.25
@@ -696,48 +904,160 @@ function love.keypressed(key)
     logMessage("love.keypressed: key=" .. tostring(key) .. ", state=" .. currentState)
     if currentState == STATE_CONNECTED then
         if key == "up" then
+            local prev = homeSelectedIndex
             if homeSelectedIndex > 1 then
                 homeSelectedIndex = homeSelectedIndex - 1
             end
+            if uiHoverSound and homeSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif key == "down" then
-            if homeSelectedIndex < 2 then
+            local prev = homeSelectedIndex
+            if homeSelectedIndex < 3 then
                 homeSelectedIndex = homeSelectedIndex + 1
+            end
+            if uiHoverSound and homeSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
             end
         elseif key == "return" or key == "space" or key == "a" or key == "x" then
             -- Confirm current selection
+            if uiSelectSound then
+                uiSelectSound:stop()
+                uiSelectSound:play()
+            end
             if homeSelectedIndex == 1 then
                 logMessage("love.keypressed: Sync selected from home")
                 uploadSaves()
             elseif homeSelectedIndex == 2 then
                 logMessage("love.keypressed: Recent selected from home")
                 showFilesList()
+            elseif homeSelectedIndex == 3 then
+                logMessage("love.keypressed: Settings selected from home")
+                currentState = STATE_SETTINGS
+                settingsSelectedIndex = 1
+                settingsStatusMessage = ""
             end
         elseif key == "escape" then
             logMessage("love.keypressed: Exit triggered via keyboard")
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
             love.event.quit()
         end
     elseif currentState == STATE_SHOWING_FILES then
         if key == "up" then
             -- Move selection up
+            local prev = filesListSelectedIndex
             if filesListSelectedIndex > 1 then
                 filesListSelectedIndex = filesListSelectedIndex - 1
             end
+            if uiHoverSound and filesListSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif key == "down" then
             -- Move selection down
+            local prev = filesListSelectedIndex
             if filesListSelectedIndex < #savesList then
                 filesListSelectedIndex = filesListSelectedIndex + 1
             end
+            if uiHoverSound and filesListSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif key == "b" or key == "escape" then
             -- Go back to connected state
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
             currentState = STATE_CONNECTED
             filesListScroll = 0
             filesListSelectedIndex = 1
+        end
+    elseif currentState == STATE_SETTINGS then
+        if key == "up" then
+            local prev = settingsSelectedIndex
+            if settingsSelectedIndex > 1 then
+                settingsSelectedIndex = settingsSelectedIndex - 1
+            end
+            if uiHoverSound and settingsSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif key == "down" then
+            local prev = settingsSelectedIndex
+            if settingsSelectedIndex < 3 then
+                settingsSelectedIndex = settingsSelectedIndex + 1
+            end
+            if uiHoverSound and settingsSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif key == "return" or key == "space" or key == "a" or key == "x" then
+            if uiSelectSound then
+                uiSelectSound:stop()
+                uiSelectSound:play()
+            end
+            if settingsSelectedIndex == 1 then
+                logMessage("Settings: Reinstall background process selected")
+                settingsStatusMessage = runReinstallBackgroundProcess()
+            elseif settingsSelectedIndex == 2 then
+                logMessage("Settings: Uninstall background process selected")
+                settingsStatusMessage = runUninstallBackgroundProcess()
+            elseif settingsSelectedIndex == 3 then
+                logMessage("Settings: History selected")
+                currentState = STATE_DEVICE_HISTORY
+                historySelectedIndex = 1
+                historyScroll = 0
+            end
+        elseif key == "b" or key == "escape" then
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
+            currentState = STATE_CONNECTED
+            settingsStatusMessage = ""
+        end
+    elseif currentState == STATE_DEVICE_HISTORY then
+        if key == "up" then
+            local prev = historySelectedIndex
+            if historySelectedIndex > 1 then
+                historySelectedIndex = historySelectedIndex - 1
+            end
+            if uiHoverSound and historySelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif key == "down" then
+            local prev = historySelectedIndex
+            if historySelectedIndex < #deviceHistory then
+                historySelectedIndex = historySelectedIndex + 1
+            end
+            if uiHoverSound and historySelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif key == "b" or key == "escape" then
+            -- Return to settings screen
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
+            currentState = STATE_SETTINGS
         end
     elseif currentState == STATE_UPLOADING or currentState == STATE_DOWNLOADING or currentState == STATE_SUCCESS then
         -- Allow exit during upload or after success
         -- But prevent immediate cancellation right after starting upload
         if (key == "escape" or key == "b") and not uploadJustStarted then
             logMessage("love.keypressed: Exit triggered via keyboard (state=" .. currentState .. ")")
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
             uploadCancelled = true
             downloadCancelled = true
             currentState = STATE_CONNECTED
@@ -751,45 +1071,152 @@ function love.gamepadpressed(joystick, button)
     logMessage("love.gamepadpressed: button=" .. tostring(button) .. ", state=" .. currentState)
     if currentState == STATE_CONNECTED then
         if button == "dpup" then
+            local prev = homeSelectedIndex
             if homeSelectedIndex > 1 then
                 homeSelectedIndex = homeSelectedIndex - 1
             end
+            if uiHoverSound and homeSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif button == "dpdown" then
-            if homeSelectedIndex < 2 then
+            local prev = homeSelectedIndex
+            if homeSelectedIndex < 3 then
                 homeSelectedIndex = homeSelectedIndex + 1
+            end
+            if uiHoverSound and homeSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
             end
         elseif button == "a" then
             -- A = confirm current selection
+            if uiSelectSound then
+                uiSelectSound:stop()
+                uiSelectSound:play()
+            end
             if homeSelectedIndex == 1 then
                 logMessage("love.gamepadpressed: Sync selected from home")
                 uploadSaves()
             elseif homeSelectedIndex == 2 then
                 logMessage("love.gamepadpressed: Recent selected from home")
                 showFilesList()
+            elseif homeSelectedIndex == 3 then
+                logMessage("love.gamepadpressed: Settings selected from home")
+                currentState = STATE_SETTINGS
+                settingsSelectedIndex = 1
+                settingsStatusMessage = ""
             end
         end
     elseif currentState == STATE_SHOWING_FILES then
         if button == "dpup" then
             -- Move selection up
+            local prev = filesListSelectedIndex
             if filesListSelectedIndex > 1 then
                 filesListSelectedIndex = filesListSelectedIndex - 1
             end
+            if uiHoverSound and filesListSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif button == "dpdown" then
             -- Move selection down
+            local prev = filesListSelectedIndex
             if filesListSelectedIndex < #savesList then
                 filesListSelectedIndex = filesListSelectedIndex + 1
             end
+            if uiHoverSound and filesListSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
         elseif button == "b" then
             -- B = go back to connected state from files list
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
             currentState = STATE_CONNECTED
             filesListScroll = 0
             filesListSelectedIndex = 1
+        end
+    elseif currentState == STATE_SETTINGS then
+        if button == "dpup" then
+            local prev = settingsSelectedIndex
+            if settingsSelectedIndex > 1 then
+                settingsSelectedIndex = settingsSelectedIndex - 1
+            end
+            if uiHoverSound and settingsSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif button == "dpdown" then
+            local prev = settingsSelectedIndex
+            if settingsSelectedIndex < 3 then
+                settingsSelectedIndex = settingsSelectedIndex + 1
+            end
+            if uiHoverSound and settingsSelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif button == "a" then
+            if uiSelectSound then
+                uiSelectSound:stop()
+                uiSelectSound:play()
+            end
+            if settingsSelectedIndex == 1 then
+                logMessage("Settings (gamepad): Reinstall background process selected")
+                settingsStatusMessage = runReinstallBackgroundProcess()
+            elseif settingsSelectedIndex == 2 then
+                logMessage("Settings (gamepad): Uninstall background process selected")
+                settingsStatusMessage = runUninstallBackgroundProcess()
+            elseif settingsSelectedIndex == 3 then
+                logMessage("Settings (gamepad): History selected")
+                currentState = STATE_DEVICE_HISTORY
+                historySelectedIndex = 1
+                historyScroll = 0
+            end
+        elseif button == "b" then
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
+            currentState = STATE_CONNECTED
+            settingsStatusMessage = ""
+        end
+    elseif currentState == STATE_DEVICE_HISTORY then
+        if button == "dpup" then
+            local prev = historySelectedIndex
+            if historySelectedIndex > 1 then
+                historySelectedIndex = historySelectedIndex - 1
+            end
+            if uiHoverSound and historySelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif button == "dpdown" then
+            local prev = historySelectedIndex
+            if historySelectedIndex < #deviceHistory then
+                historySelectedIndex = historySelectedIndex + 1
+            end
+            if uiHoverSound and historySelectedIndex ~= prev then
+                uiHoverSound:stop()
+                uiHoverSound:play()
+            end
+        elseif button == "b" then
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
+            currentState = STATE_SETTINGS
         end
     elseif currentState == STATE_UPLOADING or currentState == STATE_DOWNLOADING or currentState == STATE_SUCCESS then
         -- B = go back / cancel on sync screens (A should NOT go back)
         -- Prevent immediate cancellation right after starting upload/download
         if button == "b" and not uploadJustStarted then
             logMessage("love.gamepadpressed: Exit triggered via gamepad (B button, state=" .. currentState .. ")")
+            if uiBackSound then
+                uiBackSound:stop()
+                uiBackSound:play()
+            end
             uploadCancelled = true
             downloadCancelled = true
             currentState = STATE_CONNECTED
@@ -1402,6 +1829,12 @@ function uploadSaves()
     
     logMessage("uploadSaves: API key exists, length: " .. (apiKey and #apiKey or 0))
     
+    -- Gentle cue that a sync session is starting
+    if uiStartSyncSound then
+        uiStartSyncSound:stop()
+        uiStartSyncSound:play()
+    end
+
     -- New sync session: clear session flags and download counters
     syncSessionHadUpload = false
     syncSessionHadDownload = false
@@ -1440,9 +1873,23 @@ local function getFileMtimeSeconds(path)
     end
     local escaped = path:gsub("'", "'\\''")
     
+    -- Try method 0: date -r file +%s (works on SpruceOS/BusyBox)
+    -- This is the most reliable method for embedded Linux systems
+    local cmd0 = "date -r '" .. escaped .. "' +%s 2>/dev/null"
+    local h0 = io.popen(cmd0)
+    if h0 then
+        local out0 = h0:read("*all") or ""
+        pcall(function() h0:close() end)
+        out0 = out0:match("^%s*(%d+)")
+        local mtime0 = tonumber(out0)
+        if mtime0 and mtime0 > 0 then
+            logMessage("getFileMtimeSeconds: Success with date -r method - mtime = " .. mtime0 .. " seconds")
+            return mtime0
+        end
+    end
+    
     -- Try method 1: stat -c %Y (GNU stat)
     local cmd1 = "stat -c %Y '" .. escaped .. "' 2>/dev/null"
-    logMessage("getFileMtimeSeconds: Trying method 1 (GNU stat): " .. cmd1)
     local h1 = io.popen(cmd1)
     if h1 then
         local out1 = h1:read("*all") or ""
@@ -1450,10 +1897,9 @@ local function getFileMtimeSeconds(path)
         out1 = out1:match("^%s*(.-)%s*$")
         local mtime1 = tonumber(out1)
         if mtime1 then
-            logMessage("getFileMtimeSeconds: Success with method 1 - mtime = " .. mtime1 .. " seconds")
+            logMessage("getFileMtimeSeconds: Success with GNU stat method - mtime = " .. mtime1 .. " seconds")
             return mtime1
         end
-        logMessage("getFileMtimeSeconds: Method 1 failed, output: '" .. tostring(out1) .. "'")
     end
     
     -- Try method 2: stat -t (POSIX stat, returns timestamp as last field)
@@ -1740,6 +2186,13 @@ function doDownloadDiscover()
             if item and item.localPath and item.latestVersion and item.latestVersion.id then
                 -- Normalize certain special-case subdirectories for target paths.
                 local targetPath = item.localPath
+                
+                -- Ensure path starts with / (server may strip leading slashes)
+                if targetPath:sub(1, 1) ~= "/" then
+                    targetPath = "/" .. targetPath
+                    logMessage("download: Prepending / to path: " .. tostring(targetPath))
+                end
+                
                 if targetPath:match("/%.netplay/") then
                     local normalized = targetPath:gsub("/%.netplay/", "/")
                     logMessage("download: Normalizing netplay path " .. tostring(targetPath) .. " -> " .. tostring(normalized))
@@ -1747,14 +2200,35 @@ function doDownloadDiscover()
                 end
 
                 local cloudMs = item.latestVersion.localModifiedAtMs or item.latestVersion.uploadedAtMs or 0
+                local cloudSize = item.latestVersion.byteSize or 0
                 -- Only queue files that need download: local missing or local older than cloud
                 local localMtime = getFileMtimeSeconds(targetPath)
                 local localMs = localMtime and (localMtime * 1000) or nil
                 local needDownload = true
+                
+                -- First try timestamp comparison
                 if localMs and cloudMs and cloudMs > 0 and cloudMs <= localMs then
                     needDownload = false
-                    logMessage("download: SKIP (local newer or equal) " .. tostring(targetPath) .. " - not queuing")
+                    logMessage("download: SKIP (local newer or equal by time) " .. tostring(targetPath) .. " - not queuing")
+                elseif not localMs then
+                    -- Timestamps unavailable - fall back to SIZE comparison
+                    -- Get local file size using wc -c (works on BusyBox systems)
+                    local escaped = targetPath:gsub("'", "'\\''")
+                    local sizeCmd = "wc -c < '" .. escaped .. "' 2>/dev/null"
+                    local h = io.popen(sizeCmd)
+                    if h then
+                        local out = h:read("*all") or ""
+                        pcall(function() h:close() end)
+                        local localSize = tonumber(out:match("^%s*(%d+)"))
+                        if localSize and cloudSize > 0 and localSize == cloudSize then
+                            needDownload = false
+                            logMessage("download: SKIP (size match, no timestamp) " .. tostring(targetPath) .. " local=" .. localSize .. " cloud=" .. cloudSize)
+                        elseif localSize then
+                            logMessage("download: SIZE MISMATCH " .. tostring(targetPath) .. " local=" .. localSize .. " cloud=" .. cloudSize)
+                        end
+                    end
                 end
+                
                 if needDownload then
                     table.insert(downloadQueue, {
                         localPath = targetPath,
@@ -1823,6 +2297,9 @@ function doDownloadOneFile()
     local ok, reason = downloadOne(item.saveVersionId, item.localPath, mtimeSec)
     if ok then
         downloadSuccess = downloadSuccess + 1
+        -- Record per-device history entry for successful download
+        local displayName = item.displayName or item.localPath or "Unknown"
+        addDeviceHistoryEntry("download", displayName, item.localPath, nil, os.time())
     else
         table.insert(downloadFailedFiles, {index = i, path = item.localPath, reason = reason or "failed"})
     end
@@ -1926,6 +2403,12 @@ function doUploadDiscover()
             local localMs = localMtime and (localMtime * 1000) or nil
             local needUpload = true
             local skipReason = nil
+
+            -- Heuristic: MUOS save paths live under /MUOS/save/file (various mount roots).
+            -- On MUOS we avoid skipping purely by "same filename+size from different emulator"
+            -- because multiple mounts can point at the same card and sizes rarely change.
+            local isMuosPath =
+                fpath:match("/MUOS/save/file") ~= nil
             
             -- First check: match by full path (path is in manifest)
             if needUpload and cloudEntry and cloudEntry.cloudMs and cloudEntry.cloudMs > 0 and localMs then
@@ -1935,11 +2418,19 @@ function doUploadDiscover()
                 end
             end
             
-            -- Second check: if not skipped by path, try matching by filename + size
+            -- Second check: if not skipped by path, try matching by filename + size.
             -- This catches files from different emulator folders with identical content.
-            -- Do NOT skip if local mtime is clearly newer than cloud (user likely modified the file).
+            -- Do NOT skip if:
+            --   - local mtime is clearly newer than cloud (user modified the file), or
+            --   - we are on MUOS, where mirrored mounts make this heuristic unsafe.
             -- Also do not skip by filename+size when we have no local mtime (can't prove not newer).
-            if needUpload and saveKeyEntry and saveKeyEntry.byteSize and saveKeyEntry.byteSize > 0 and localMs then
+            if not isMuosPath
+                and needUpload
+                and saveKeyEntry
+                and saveKeyEntry.byteSize
+                and saveKeyEntry.byteSize > 0
+                and localMs
+            then
                 local localSize = getFileSize(fpath)
                 if localSize and localSize == saveKeyEntry.byteSize then
                     local cloudMs = saveKeyEntry.cloudMs or 0
@@ -1950,6 +2441,17 @@ function doUploadDiscover()
                         needUpload = false
                         skipReason = "already on cloud (same filename+size from different emulator)"
                     end
+                end
+            end
+            
+            -- Third check: timestamps unavailable but cloud has this exact path with same size
+            -- (fallback for platforms where stat doesn't work)
+            if needUpload and not localMs and cloudEntry and cloudEntry.byteSize and cloudEntry.byteSize > 0 then
+                local localSize = getFileSize(fpath)
+                if localSize and localSize == cloudEntry.byteSize then
+                    needUpload = false
+                    skipReason = "size match, timestamps unavailable (path match)"
+                    logMessage("uploadSaves: SIZE MATCH (no timestamp) " .. tostring(fpath) .. " local=" .. localSize .. " cloud=" .. cloudEntry.byteSize)
                 end
             end
             
@@ -2289,6 +2791,8 @@ function uploadSave(filepath)
                 return "skipped"  -- so pcall caller sees first return value
             end
             logMessage("uploadSave: Successfully uploaded " .. filename)
+            -- Record per-device history entry for successful upload
+            addDeviceHistoryEntry("upload", filename, filepath, fileSize, os.time())
             logMessage("=== uploadSave END (SUCCESS) ===")
             return true
         else
@@ -2329,8 +2833,9 @@ function findSaveFiles()
     -- Use shell to find save files (LOVE2D filesystem is sandboxed)
     -- Only battery saves (.sav/.srm), no .bak files, no save states
     local locations = {
-        -- SpruceOS / Onion-style
+        -- SpruceOS / Onion-style (check both uppercase and lowercase variants)
         "/mnt/SDCARD/Saves/saves",
+        "/mnt/sdcard/Saves/saves",
 
         -- muOS common roots (in-game saves)
         "/SD1 (mmc)/MUOS/save/file",
@@ -2482,17 +2987,143 @@ function saveDeviceName(name)
     end
 end
 
+-- Device-local history persistence (THIS DEVICE ONLY)
+local MAX_HISTORY_ENTRIES = 100
+
+function loadDeviceHistory()
+    deviceHistory = {}
+    local file = io.open(HISTORY_FILE, "r")
+    if not file then
+        return
+    end
+    local content = file:read("*all")
+    file:close()
+    if not content or content == "" then
+        return
+    end
+
+    local ok, data = pcall(function()
+        return json.decode(content)
+    end)
+    if ok and type(data) == "table" then
+        deviceHistory = data
+    else
+        deviceHistory = {}
+    end
+end
+
+local function saveDeviceHistory()
+    local trimmed = {}
+    for i, entry in ipairs(deviceHistory) do
+        if i > MAX_HISTORY_ENTRIES then break end
+        table.insert(trimmed, entry)
+    end
+    deviceHistory = trimmed
+
+    local ok, encoded = pcall(function()
+        return json.encode(deviceHistory)
+    end)
+    if not ok or not encoded then
+        return
+    end
+    local file = io.open(HISTORY_FILE, "w")
+    if file then
+        file:write(encoded)
+        file:close()
+    end
+end
+
+function addDeviceHistoryEntry(direction, name, path, size, ts)
+    local entry = {
+        direction = direction,      -- "upload" or "download"
+        name = name or "Unknown",
+        path = path or "",
+        size = size or 0,
+        ts = ts or os.time(),
+        device = deviceName or "Unknown"
+    }
+
+    -- newest-first
+    table.insert(deviceHistory, 1, entry)
+    if #deviceHistory > MAX_HISTORY_ENTRIES then
+        while #deviceHistory > MAX_HISTORY_ENTRIES do
+            table.remove(deviceHistory)
+        end
+    end
+    saveDeviceHistory()
+end
+
+function formatHistoryTime(ts)
+    if not ts then return "" end
+    local now = os.time()
+    local diff = now - ts
+    if diff < 0 then diff = 0 end
+
+    if diff < 5 then
+        return "just now"
+    elseif diff < 60 then
+        return tostring(diff) .. "s ago"
+    elseif diff < 3600 then
+        local m = math.floor(diff / 60)
+        return tostring(m) .. "m ago"
+    elseif diff < 86400 then
+        local h = math.floor(diff / 3600)
+        return tostring(h) .. "h ago"
+    else
+        return os.date("%Y-%m-%d %H:%M", ts)
+    end
+end
+
+-- Helpers to run background process scripts from SETTINGS
+local function runBackgroundScript(scriptPath, actionLabel)
+    if not scriptPath or scriptPath == "" then
+        return "Script path not configured"
+    end
+
+    local f = io.open(scriptPath, "r")
+    if not f then
+        return "Script not found: " .. scriptPath
+    end
+    f:close()
+
+    local quoted = "'" .. tostring(scriptPath):gsub("'", "'\\''") .. "'"
+    local cmd = "bash " .. quoted .. " >/dev/null 2>&1"
+    logMessage("Running background script: " .. cmd .. " (" .. tostring(actionLabel) .. ")")
+    local ok = os.execute(cmd)
+    if ok == true or ok == 0 then
+        return actionLabel .. " succeeded"
+    else
+        return actionLabel .. " failed"
+    end
+end
+
+function runReinstallBackgroundProcess()
+    return runBackgroundScript(INSTALL_BG_SCRIPT, "Reinstall background process")
+end
+
+function runUninstallBackgroundProcess()
+    return runBackgroundScript(UNINSTALL_BG_SCRIPT, "Uninstall background process")
+end
+
 -- JSON decoding is now handled by dkjson library
 -- No custom jsonDecode function needed
 
 -- Combine any existing log files into one
 function consolidateLogs()
+    -- Ensure data directory exists before reading/writing logs
+    pcall(function()
+        os.execute("mkdir -p '" .. DATA_DIR .. "' 2>/dev/null")
+    end)
+    
     local logFiles = {
         DATA_DIR .. "/debug.log",
         DATA_DIR .. "/http_resp.txt",
         DATA_DIR .. "/http_post.txt",
         DATA_DIR .. "/http_err.txt",
-        APP_DIR .. "/log.txt"  -- Launcher log
+        APP_DIR .. "/log.txt",  -- Launcher log (older builds)
+        DATA_DIR .. "/watcher.log",  -- Background watcher
+        DATA_DIR .. "/muos_autostart.log",  -- muOS init/watcher launcher
+        "/mnt/SDCARD/Saves/spruce/retrosync.log", -- spruceOS networkservices integration log
     }
     
     local consolidated = {}
@@ -2517,9 +3148,12 @@ function consolidateLogs()
     if #consolidated > 0 then
         local file = io.open(LOG_FILE, "a")
         if file then
-            file:write("\n=== Log consolidation at " .. os.date("%Y-%m-%d %H:%M:%S") .. " ===\n")
-            file:write(table.concat(consolidated))
-            file:write("=== End of consolidated logs ===\n\n")
+            pcall(function()
+                file:write("\n=== Log consolidation at " .. os.date("%Y-%m-%d %H:%M:%S") .. " ===\n")
+                file:write(table.concat(consolidated))
+                file:write("=== End of consolidated logs ===\n\n")
+                file:flush()  -- Force write to disk
+            end)
             file:close()
         end
     end
@@ -2540,14 +3174,32 @@ end
 
 -- Logging function - writes to log file in app directory
 function logMessage(msg)
-    local timestamp = os.date("%Y-%m-%d %H:%M:%S")
+    local timestamp = os.date("%Y-%m-%d %H:%M:%S")  -- Use local time for log readability
     local logEntry = "[" .. timestamp .. "] " .. tostring(msg) .. "\n"
     
+    -- Ensure data directory exists before writing
+    pcall(function()
+        os.execute("mkdir -p '" .. DATA_DIR .. "' 2>/dev/null")
+    end)
+    
+    -- Try to write to log file
     local file = io.open(LOG_FILE, "a")
     if file then
-        file:write(logEntry)
+        local writeOk, writeErr = pcall(function()
+            file:write(logEntry)
+            file:flush()  -- Force write to disk immediately
+        end)
+        if not writeOk then
+            -- If write failed, try to log the error (but avoid infinite recursion)
+            print("[LOG ERROR] Failed to write log entry: " .. tostring(writeErr))
+        end
         file:close()
+    else
+        -- If file open failed, print error (but avoid infinite recursion)
+        print("[LOG ERROR] Failed to open log file: " .. tostring(LOG_FILE))
+        print(logEntry)  -- Still print to console
     end
+    
     -- Also print to console if available
     print(logEntry)
 end
