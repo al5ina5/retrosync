@@ -76,47 +76,10 @@ export async function GET(request: NextRequest) {
       (save) => save.locations.length === 0
     )
 
-    // If a device has multiple locations for the same save (e.g., different cores),
-    // pick the one with the latest version. Group by saveId first.
-    const locationsBySave = new Map<string, typeof locations>()
-    for (const loc of locations) {
-      const existing = locationsBySave.get(loc.saveId)
-      if (!existing) {
-        locationsBySave.set(loc.saveId, [loc])
-      } else {
-        existing.push(loc)
-      }
-    }
-
-    // For each save, if multiple locations exist, pick the one with the latest version
-    const selectedLocations: typeof locations = []
-    locationsBySave.forEach((locs, saveId) => {
-      if (locs.length === 1) {
-        selectedLocations.push(locs[0])
-      } else {
-        // Multiple locations for same save - find the one with latest version
-        let latestLoc = locs[0]
-        let latestTime = 0
-
-        for (const loc of locs) {
-          // Get the latest version for this location's save
-          const versions = loc.save.versions
-          if (versions.length > 0) {
-            const latest = versions[0]
-            const versionTime = latest.localModifiedAt.getTime()
-            if (versionTime > latestTime) {
-              latestTime = versionTime
-              latestLoc = loc
-            }
-          }
-        }
-
-        selectedLocations.push(latestLoc)
-        console.log(
-          `[Manifest] Device ${device.id} has ${locs.length} locations for save ${latestLoc.save.saveKey}, selected latest: ${latestLoc.localPath}`
-        )
-      }
-    })
+    // Include ALL locations for each save (different emulator folders should all be tracked)
+    // The client needs to know about all paths to avoid re-uploading the same content
+    // from different folders (e.g., gpSP vs mGBA, LudicrousN64 vs Mupen64Plus-Next)
+    const selectedLocations = locations
 
     const manifest = selectedLocations.map((loc) => {
       // Select latest version, preferring real mtimes over fallback times

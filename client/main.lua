@@ -122,6 +122,10 @@ local homeIntroDuration = 0.9  -- slow down intro for more impact
 local codeIntroTimer = 0  -- Animation timer for code screen
 local codeIntroDuration = 0.9  -- Same duration as home screen
 
+-- Input debounce to prevent double input from keyboard+gamepad on retro handhelds
+local lastInputTime = 0
+local inputDebounceThreshold = 0.08  -- 80ms debounce window
+
 -- Timer for polling
 local pollTimer = 0
 local codeDisplayTimer = 0
@@ -901,6 +905,14 @@ function love.draw()
 end
 
 function love.keypressed(key)
+    -- Debounce to prevent double input from keyboard+gamepad firing together
+    local currentTime = love.timer.getTime()
+    if currentTime - lastInputTime < inputDebounceThreshold then
+        logMessage("love.keypressed: debounced key=" .. tostring(key))
+        return
+    end
+    lastInputTime = currentTime
+    
     logMessage("love.keypressed: key=" .. tostring(key) .. ", state=" .. currentState)
     if currentState == STATE_CONNECTED then
         if key == "up" then
@@ -1068,6 +1080,14 @@ function love.keypressed(key)
 end
 
 function love.gamepadpressed(joystick, button)
+    -- Debounce to prevent double input from keyboard+gamepad firing together
+    local currentTime = love.timer.getTime()
+    if currentTime - lastInputTime < inputDebounceThreshold then
+        logMessage("love.gamepadpressed: debounced button=" .. tostring(button))
+        return
+    end
+    lastInputTime = currentTime
+    
     logMessage("love.gamepadpressed: button=" .. tostring(button) .. ", state=" .. currentState)
     if currentState == STATE_CONNECTED then
         if button == "dpup" then
@@ -1864,8 +1884,20 @@ function uploadSaves()
     logMessage("uploadSaves: State immediately set to UPLOADING, work deferred (chunked per frame)")
 end
 
+-- Timestamp validation constants (must match watcher.sh)
+-- Timestamps outside this range are considered invalid/corrupted (e.g., FAT32 corruption)
+-- Range: Jan 2015 to Jan 2035
+local MIN_VALID_TIMESTAMP = 1420070400    -- 2015-01-01 00:00:00 UTC
+local MAX_VALID_TIMESTAMP = 2051222400    -- 2035-01-01 00:00:00 UTC
+
+local function isValidTimestamp(ts)
+    if not ts or type(ts) ~= "number" then return false end
+    return ts >= MIN_VALID_TIMESTAMP and ts <= MAX_VALID_TIMESTAMP
+end
+
 -- Get file modified time (seconds since epoch) using shell
 -- Tries multiple methods for compatibility with different stat implementations
+-- Returns nil for corrupted/invalid timestamps (outside 2015-2035 range)
 local function getFileMtimeSeconds(path)
     if not path or path == "" then
         logMessage("getFileMtimeSeconds: Invalid path (nil or empty)")
@@ -1883,8 +1915,13 @@ local function getFileMtimeSeconds(path)
         out0 = out0:match("^%s*(%d+)")
         local mtime0 = tonumber(out0)
         if mtime0 and mtime0 > 0 then
-            logMessage("getFileMtimeSeconds: Success with date -r method - mtime = " .. mtime0 .. " seconds")
-            return mtime0
+            if isValidTimestamp(mtime0) then
+                logMessage("getFileMtimeSeconds: Success with date -r method - mtime = " .. mtime0 .. " seconds")
+                return mtime0
+            else
+                logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (date -r): " .. mtime0 .. " (" .. os.date("%Y-%m-%d", mtime0) .. ") - returning nil for size-based comparison")
+                return nil
+            end
         end
     end
     
@@ -1897,8 +1934,13 @@ local function getFileMtimeSeconds(path)
         out1 = out1:match("^%s*(.-)%s*$")
         local mtime1 = tonumber(out1)
         if mtime1 then
-            logMessage("getFileMtimeSeconds: Success with GNU stat method - mtime = " .. mtime1 .. " seconds")
-            return mtime1
+            if isValidTimestamp(mtime1) then
+                logMessage("getFileMtimeSeconds: Success with GNU stat method - mtime = " .. mtime1 .. " seconds")
+                return mtime1
+            else
+                logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (GNU stat): " .. mtime1 .. " - returning nil")
+                return nil
+            end
         end
     end
     
@@ -1918,8 +1960,13 @@ local function getFileMtimeSeconds(path)
         if #fields >= 8 then
             local mtime2 = tonumber(fields[8]) -- mtime is 8th field
             if mtime2 then
-                logMessage("getFileMtimeSeconds: Success with method 2 - mtime = " .. mtime2 .. " seconds")
-                return mtime2
+                if isValidTimestamp(mtime2) then
+                    logMessage("getFileMtimeSeconds: Success with method 2 - mtime = " .. mtime2 .. " seconds")
+                    return mtime2
+                else
+                    logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (POSIX stat): " .. mtime2 .. " - returning nil")
+                    return nil
+                end
             end
         end
         logMessage("getFileMtimeSeconds: Method 2 failed, output: '" .. tostring(out2) .. "'")
@@ -1991,8 +2038,13 @@ local function getFileMtimeSeconds(path)
                     }
                     local mtime3 = os.time(timeTable)
                     if mtime3 and mtime3 > 0 then
-                        logMessage("getFileMtimeSeconds: Success with method 3 - mtime = " .. mtime3 .. " seconds (" .. os.date("%Y-%m-%d %H:%M:%S", mtime3) .. ")")
-                        return mtime3
+                        if isValidTimestamp(mtime3) then
+                            logMessage("getFileMtimeSeconds: Success with method 3 - mtime = " .. mtime3 .. " seconds (" .. os.date("%Y-%m-%d %H:%M:%S", mtime3) .. ")")
+                            return mtime3
+                        else
+                            logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (ls -l): " .. mtime3 .. " - returning nil")
+                            return nil
+                        end
                     else
                         logMessage("getFileMtimeSeconds: os.time() failed for parsed date")
                     end
@@ -2026,8 +2078,13 @@ local function getFileMtimeSeconds(path)
                 out4b = out4b:match("^%s*(.-)%s*$")
                 local mtime4 = tonumber(out4b)
                 if mtime4 and mtime4 > 0 then
-                    logMessage("getFileMtimeSeconds: Success with method 4 - mtime = " .. mtime4 .. " seconds")
-                    return mtime4
+                    if isValidTimestamp(mtime4) then
+                        logMessage("getFileMtimeSeconds: Success with method 4 - mtime = " .. mtime4 .. " seconds")
+                        return mtime4
+                    else
+                        logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (method 4): " .. mtime4 .. " - returning nil")
+                        return nil
+                    end
                 end
             end
             -- Try BusyBox date format
@@ -2040,8 +2097,13 @@ local function getFileMtimeSeconds(path)
                 out4c = out4c:match("^%s*(.-)%s*$")
                 local mtime4c = tonumber(out4c)
                 if mtime4c and mtime4c > 0 then
-                    logMessage("getFileMtimeSeconds: Success with method 4 (BusyBox date) - mtime = " .. mtime4c .. " seconds")
-                    return mtime4c
+                    if isValidTimestamp(mtime4c) then
+                        logMessage("getFileMtimeSeconds: Success with method 4 (BusyBox date) - mtime = " .. mtime4c .. " seconds")
+                        return mtime4c
+                    else
+                        logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (BusyBox date): " .. mtime4c .. " - returning nil")
+                        return nil
+                    end
                 end
             end
         end
