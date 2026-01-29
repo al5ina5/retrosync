@@ -249,6 +249,46 @@ export async function POST(request: NextRequest) {
           })
         }
 
+        // Check if ANY version (across all devices) already has this exact content hash
+        // This prevents duplicate S3 uploads when the same file is uploaded from different paths
+        const existingVersionWithSameHash = await prisma.saveVersion.findFirst({
+          where: {
+            saveId: save.id,
+            contentHash: hashHex,
+          },
+          orderBy: { uploadedAt: 'desc' },
+        })
+
+        if (existingVersionWithSameHash) {
+          console.log(
+            `[Upload] Content already exists for save ${save.id} (hash=${hashHex.slice(0, 8)}...), ` +
+            `path ${effectiveLocalPath} added but no new version created`
+          )
+
+          await prisma.syncLog.create({
+            data: {
+              deviceId: device.id,
+              action,
+              filePath: safeFilePath,
+              fileSize: typeof fileSize === 'number' ? fileSize : fileBuffer.length,
+              status: 'skipped',
+              errorMsg: 'Content already exists (path registered)',
+              saveId: save.id,
+              saveVersionId: existingVersionWithSameHash.id,
+            },
+          })
+
+          return successResponse({
+            message: 'Path registered - content already exists',
+            skipped: true,
+            uploaded: false,
+            pathAdded: true,
+            saveId: save.id,
+            saveVersionId: existingVersionWithSameHash.id,
+            contentHash: hashHex,
+          })
+        }
+
         // If the latest known version for this device/save already has the same
         // content hash and (roughly) the same mtime/size, treat this as a no-op
         // and report it as "skipped" so the client can show 0 changed files.
