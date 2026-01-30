@@ -23,6 +23,9 @@ Only add options that need **no typing and no file browsing**:
 | Add | Why OK |
 |-----|--------|
 | **Unpair** | Single action (with confirmation): clear pairing and return to code screen. |
+| **Music: On / Off** (toggle) | Toggle background music on/off. |
+| **Sounds: On / Off** (toggle) | Toggle UI sound effects on/off. |
+| **Theme: [Name]** (cycle) | Cycle through visual themes (Classic Green, Virtual Boy Red, Game Boy Pocket Blue, Classic Grayscale). Changes colors immediately. |
 | Background process: Enabled / Disabled (toggle) | Toggle watcher on/off; runs install or uninstall script accordingly. Left/right or select to toggle. |
 | **Go Back** | Already present. |
 
