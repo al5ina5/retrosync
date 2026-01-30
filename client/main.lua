@@ -96,8 +96,9 @@ function love.load()
             f:close()
             local escapedApp = config.APP_DIR:gsub("'", "'\\''")
             local escapedScript = installScript:gsub("'", "'\\''")
-            local cmd = "bash '" .. escapedScript .. "' '" .. escapedApp .. "' >/dev/null 2>&1"
-            log.logMessage("macOS: running autostart installer to set up background service")
+            -- Run installer in background so love.load() returns quickly (avoids Mac loading spinner)
+        local cmd = "bash '" .. escapedScript .. "' '" .. escapedApp .. "' >/dev/null 2>&1 &"
+            log.logMessage("macOS: running autostart installer in background")
             os.execute(cmd)
             -- Watcher is run by launchd (LaunchAgent), not by us; do not set weStartedWatcher
         else

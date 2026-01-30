@@ -7,8 +7,74 @@ on:
 
 # One release per tag; no cancel.
 jobs:
+  # --- Build PortMaster package (handhelds / Linux PortMaster) on Ubuntu ---
+  build-portmaster:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build PortMaster package
+        run: |
+          if [ ! -f client/build/portmaster/build.sh ]; then
+            echo "PortMaster build script not found, skipping."
+            exit 0
+          fi
+          cd client && ./build/portmaster/build.sh
+
+      - name: Zip PortMaster package
+        if: hashFiles('client/dist/portmaster/**') != ''
+        run: |
+          V="${{ github.ref_name }}"
+          cd client/dist/portmaster
+          zip -r "retrosync-portmaster-${V}.zip" .
+          mv "retrosync-portmaster-${V}.zip" ../..
+          cd ../..
+          # Desktop .love for Linux/Windows (same game, run with system LÖVE)
+          cp dist/portmaster/RetroSync/RetroSync.love "retrosync-${V}.love" 2>/dev/null || true
+
+      - name: Upload PortMaster artifacts
+        if: hashFiles('client/dist/portmaster/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: portmaster-${{ github.ref_name }}
+          path: |
+            client/retrosync-portmaster-${{ github.ref_name }}.zip
+            client/retrosync-${{ github.ref_name }}.love
+
+  # --- Build macOS .app on macOS runner ---
+  build-macos:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build macOS app
+        run: |
+          if [ ! -f client/build/macos/build.sh ]; then
+            echo "macOS build script not found, skipping."
+            exit 0
+          fi
+          cd client && ./build/macos/build.sh
+
+      - name: Zip macOS dist
+        if: hashFiles('client/dist/macos/**') != ''
+        run: |
+          V="${{ github.ref_name }}"
+          cd client/dist/macos
+          zip -r "retrosync-macos-${V}.zip" .
+          mv "retrosync-macos-${V}.zip" ../..
+          cd ../..
+
+      - name: Upload macOS artifact
+        if: hashFiles('client/dist/macos/**') != ''
+        uses: actions/upload-artifact@v4
+        with:
+          name: macos-${{ github.ref_name }}
+          path: client/retrosync-macos-${{ github.ref_name }}.zip
+
+  # --- Build dashboard and create GitHub Release with all client assets ---
   release:
     runs-on: ubuntu-latest
+    needs: [build-portmaster, build-macos]
     permissions:
       contents: write
     steps:
@@ -32,24 +98,33 @@ jobs:
       - name: Build dashboard
         run: npm run dashboard:build
 
-      - name: Build client (if scripts exist)
-        run: |
-          if [ -f client/build/portmaster/build.sh ]; then
-            npm run client:build
-          fi
+      - name: Download PortMaster artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: portmaster-${{ github.ref_name }}
         continue-on-error: true
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-${{ github.ref_name }}
+        continue-on-error: true
+
+      # Gather whatever was downloaded so we only attach existing files
+      - name: Prepare release assets
+        run: |
+          mkdir -p release-assets
+          V="${{ github.ref_name }}"
+          for f in "portmaster-${V}/retrosync-portmaster-${V}.zip" "portmaster-${V}/retrosync-${V}.love" "macos-${V}/retrosync-macos-${V}.zip"; do
+            [ -f "$f" ] && cp "$f" release-assets/
+          done
+          ls -la release-assets/
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           generate_release_notes: true
           draft: false
+          files: release-assets/*
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      # Optional: upload dashboard .next as artifact (for self-hosted deploy)
-      # - name: Upload dashboard build
-      #   uses: actions/upload-artifact@v4
-      #   with:
-      #     name: dashboard-next-${{ github.ref_name }}
-      #     path: dashboard/.next
