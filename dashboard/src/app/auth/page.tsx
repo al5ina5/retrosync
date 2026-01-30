@@ -8,7 +8,7 @@ import { useState } from "react";
 export default function AuthPage() {
   const router = useRouter();
   const auth = useAuthContext();
-  const [mode, setMode] = useState<"login" | "register">("login");
+  const [mode, setMode] = useState<"login" | "register">("register");
 
   if (auth === null) return <div>Loading...</div>;
   const { isAuthenticated, isLoading } = auth;
@@ -21,13 +21,19 @@ export default function AuthPage() {
   const isLoginMode = mode === "login";
 
   return (
-    <div className="max-w-xl mx-auto p-12 space-y-12">
+    <div className="max-w-xl mx-auto p-12 pt-24 space-y-24 text-center">
       {isLoginMode ? (
-        <h1 className="text-6xl">Sign in to your account</h1>
+        <div className="space-y-6">
+          <h1 className="text-4xl">Sign in to your account</h1>
+          <button className="text-xl underline hover:no-underline" type="button" onClick={() => setMode("register")}>or sign up</button>
+        </div>
       ) : (
-        <h1 className="text-6xl">Sign up for a new account</h1>
+        <div className="space-y-6">
+          <h1 className="text-4xl">Sign up for a new account</h1>
+          <button className="text-xl underline hover:no-underline" type="button" onClick={() => setMode("login")}>or sign in</button>
+        </div>
       )}
       <AuthForm mode={mode} setMode={setMode} />
-    </div>
+    </div >
   );
 }

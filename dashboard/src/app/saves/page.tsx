@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useSavesContext } from "@/contexts/SavesContext";
 import { SaveList } from "@/components/saves";
+import Layout from "@/components/ui/Layout";
 
 export default function SavesPage() {
   const router = useRouter();
@@ -22,9 +23,8 @@ export default function SavesPage() {
   const count = saves?.count ?? 0;
 
   return (
-    <div className="max-w-3xl mx-auto p-12 space-y-12">
-      {/* <h1>Saves ({count})</h1> */}
+    <Layout>
       <SaveList />
-    </div>
+    </Layout>
   );
 }

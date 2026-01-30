@@ -51,4 +51,13 @@ body {
             0 0 1em var(--gameboy-light),
             0 0 1.5em var(--gameboy-dark);
     }
+
+    .hide-scrollbar {
+        -ms-overflow-style: none;
+        scrollbar-width: none;
+    }
+
+    .hide-scrollbar::-webkit-scrollbar {
+        display: none;
+    }
 }

@@ -12,7 +12,7 @@ export function DeviceList() {
     <>
       {error && <div>{error.message}</div>}
       {deleteError && <div>{deleteError}</div>}
-      <ul className="grid grid-cols-2 gap-6">
+      <ul className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {devices.map((device) => (
           <DeviceItem key={device.id} device={device} />
         ))}

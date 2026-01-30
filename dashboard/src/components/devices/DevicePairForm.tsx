@@ -22,7 +22,7 @@ export function DevicePairForm() {
           onChange={(e) => setCode(e.target.value.toUpperCase())}
           placeholder="000000"
           maxLength={6}
-          className="w-full bg-transparent text-center placeholder:text-gameboy-light text-6xl outline-none"
+          className="w-full bg-transparent text-center placeholder:text-gameboy-light text-2xl md:text-6xl outline-none"
         />
         <div className="flex items-stretch p-2">
           <button type="submit" disabled={isPairing || code.length !== 6} className="bg-gameboy-light text-gameboy-darkest px-6 py-3 whitespace-nowrap">

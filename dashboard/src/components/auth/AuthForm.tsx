@@ -20,7 +20,7 @@ export function AuthForm({ mode, setMode }: { mode: "login" | "register", setMod
     const result =
       mode === "login" ? await login(email, password) : await register(email, password);
     setSubmitting(false);
-    if (result.success) router.push("/");
+    if (result.success) router.push("/devices");
     else setError(result.error || "Something went wrong");
   };
 
@@ -28,6 +28,10 @@ export function AuthForm({ mode, setMode }: { mode: "login" | "register", setMod
     setError("");
     setMode(mode === "login" ? "register" : "login");
   };
+
+  const isValidEmail = email.trim().length > 0 && email.includes("@");
+  const isValidPassword = password.length > 0;
+  const isFormValid = isValidEmail && isValidPassword;
 
   return (
     <form onSubmit={handleSubmit} className="space-y-6">
@@ -54,21 +58,21 @@ export function AuthForm({ mode, setMode }: { mode: "login" | "register", setMod
         />
       </div>
       {error && <p>{error}</p>}
-      <div className="flex justify-between gap-2">
-        <button
+      <div className="flex justify-end gap-2">
+        {/* <button
           type="button"
           onClick={handleSwitchMode}
           disabled={submitting}
           className="border-2 border-gameboy-darkest text-gameboy-darkest py-2 px-4 hover:opacity-80 disabled:opacity-50"
         >
           {mode === "login" ? "Register" : "Sign In"}
-        </button>
+        </button> */}
         <button
           type="submit"
-          disabled={submitting}
-          className="bg-gameboy-darkest text-gameboy-lightest py-2 px-4"
+          disabled={submitting || !isFormValid}
+          className="bg-gameboy-darkest text-gameboy-lightest py-2 px-4 disabled:opacity-50 disabled:cursor-not-allowed"
         >
-          {submitting ? "Loading..." : mode === "login" ? "Sign In" : "Register"}
+          {submitting ? "Loading..." : mode === "login" ? "Sign In" : "Sign Up"}
         </button>
       </div>
     </form>

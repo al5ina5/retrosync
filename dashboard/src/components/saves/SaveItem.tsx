@@ -2,11 +2,10 @@
 
 import type { Save } from "@/types";
 import { useSaves } from "@/hooks";
-import { SaveActions } from "./SaveActions";
-import { Toggle } from "../ui";
-import { Download } from "lucide-react";
 import { useMemo } from "react";
 import clsx from "clsx";
+import { SaveItemMobile } from "./SaveItemMobile";
+import { SaveItemDesktop } from "./SaveItemDesktop";
 
 type SaveItemProps = {
   save: Save;
@@ -15,19 +14,7 @@ type SaveItemProps = {
 };
 
 export function SaveItem({ save, expanded, onToggleExpand }: SaveItemProps) {
-  const {
-    formatFileSize,
-    formatRelativeTime,
-    downloadSave,
-    isDownloading,
-    setSyncStrategy,
-    isUpdatingStrategy,
-    deleteConfirmId,
-    requestDelete,
-    cancelDelete,
-    deleteSave,
-    isDeleting,
-  } = useSaves();
+  const { formatFileSize, formatRelativeTime, setSyncStrategy, isUpdatingStrategy } = useSaves();
 
   const syncEnabled = save.syncStrategy === "shared";
   const isUpdating = isUpdatingStrategy === save.id;
@@ -49,79 +36,28 @@ export function SaveItem({ save, expanded, onToggleExpand }: SaveItemProps) {
     return Array.from(map.entries());
   }, [save.locations]);
 
+  const shared = {
+    save,
+    expanded,
+    formatRelativeTime,
+    formatFileSize,
+    syncEnabled,
+    isUpdating,
+    onSyncChange: handleSyncChange,
+    locationsByDevice,
+  };
+
   return (
     <li
       className={clsx(
         "cursor-pointer",
-        "hover:bg-gameboy-darkest hover:text-gameboy-light",
+        "md:hover:bg-gameboy-darkest md:hover:text-gameboy-light",
         expanded ? "bg-gameboy-darkest text-gameboy-light" : "bg-gameboy-light"
       )}
       onClick={onToggleExpand}
     >
-      <div className="flex">
-        <p className="p-2 px-4 border-r-2 border-gameboy-lightest truncate flex-1">
-          {save.displayName}
-        </p>
-        <div
-          className="p-2 px-4 border-r-2 border-gameboy-lightest"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <button aria-label="Download">
-            <Download size={20} />
-          </button>
-        </div>
-        <div
-          className="flex p-2 px-4 gap-2 items-center"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <p>Sync</p>
-          <Toggle
-            checked={syncEnabled}
-            onChange={handleSyncChange}
-            disabled={isUpdating}
-            aria-label={syncEnabled ? "Sync shared (on)" : "Sync per device (off)"}
-          />
-        </div>
-      </div>
-      <div className="text-xs border-t-2 border-gameboy-lightest flex">
-
-        <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
-          {formatRelativeTime(save.lastModifiedAt)}
-        </p>
-
-        <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
-          ({formatFileSize(save.fileSize)})
-        </p>
-        <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
-          {save.locations.length} locations
-        </p>
-      </div>
-
-      {expanded && (
-        <div className="p-2 px-4 border-t-2 border-gameboy-lightest">
-          <ul className="space-y-2">
-            {locationsByDevice.map(([deviceId, { name, paths }]) => (
-              <li key={deviceId}>
-                <span className="font-medium">{name}</span>
-                <ul className="mt-1 ml-2 space-y-0.5 text-sm">
-                  {paths.map((path, i) => (
-                    <li key={`${deviceId}-${i}`} className="truncate">
-                      {path}
-                    </li>
-                  ))}
-                </ul>
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
-
-
-      {/* <span> ({formatFileSize(save.fileSize)})</span> */}
-      {/* <span> — {formatRelativeTime(save.lastModifiedAt)}</span> */}
-      {/* <span> — {save.syncStrategy}</span> */}
-      {/* <SaveActions save={save} /> */}
-      {/* <SaveLocations locations={save.locations} /> */}
+      <SaveItemMobile {...shared} />
+      <SaveItemDesktop {...shared} />
     </li>
   );
 }

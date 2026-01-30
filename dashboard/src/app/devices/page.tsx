@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { DevicePairForm, DeviceList } from "@/components/devices";
+import Layout from "@/components/ui/Layout";
 
 export default function DevicesPage() {
   const router = useRouter();
@@ -18,9 +19,9 @@ export default function DevicesPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto p-12 space-y-12">
+    <Layout>
       <DevicePairForm />
       <DeviceList />
-    </div>
+    </Layout>
   );
 }
