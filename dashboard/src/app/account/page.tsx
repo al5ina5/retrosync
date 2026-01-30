@@ -2,11 +2,11 @@
 
 import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/contexts/AuthContext";
-import { DevicePairForm, DeviceList } from "@/components/devices";
+import { Subscription, AccountDetails, DangerZone } from "@/components/account";
 import Layout from "@/components/ui/Layout";
 import { Button } from "@/components/ui";
 
-export default function DevicesPage() {
+export default function AccountPage() {
   const router = useRouter();
   const auth = useAuthContext();
 
@@ -21,7 +21,13 @@ export default function DevicesPage() {
 
   return (
     <Layout>
-      Shake it to the max.
+      <div className="space-y-24">
+        <AccountDetails />
+
+        <Subscription />
+
+        <DangerZone />
+      </div>
 
       <div className="flex justify-center">
         <Button variant="primary" onClick={() => auth.logout()}>

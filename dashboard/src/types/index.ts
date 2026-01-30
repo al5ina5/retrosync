@@ -46,8 +46,16 @@ export interface SavesResponse {
   count: number;
 }
 
+export interface AuthUser {
+  subscriptionTier: string;
+  email?: string;
+  name?: string;
+  createdAt?: string;
+}
+
 export interface AuthState {
   isAuthenticated: boolean;
   isLoading: boolean;
   token: string | null;
+  user: AuthUser | null;
 }

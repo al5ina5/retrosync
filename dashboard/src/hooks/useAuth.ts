@@ -1,6 +1,7 @@
 "use client";
 
 import type { AuthState } from "@/types";
+import type { UpdateAccountBody } from "@/lib/api/account";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { useAuthState } from "./useAuthState";
 
@@ -12,6 +13,11 @@ export interface UseAuthOptions {
 export interface UseAuthReturn extends AuthState {
   logout: () => void;
   getToken: () => string | null;
+  refreshUser: () => void;
+  updateAccount: (
+    body: UpdateAccountBody
+  ) => Promise<{ success: boolean; error?: string }>;
+  deleteAccount: (password: string) => Promise<{ success: boolean; error?: string }>;
   login: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
   register: (email: string, password: string) => Promise<{ success: boolean; error?: string }>;
 }
