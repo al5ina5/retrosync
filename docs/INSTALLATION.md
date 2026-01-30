@@ -9,405 +9,342 @@
 
 1. [Quick Start](#quick-start)
 2. [Prerequisites](#prerequisites)
-3. [muOS Installation (Anbernic RG35XX+)](#muos-installation-anbernic-rg35xx)
-4. [Spruce OS Installation (Miyoo Flip)](#spruce-os-installation-miyoo-flip)
-5. [PC Installation (Windows/macOS/Linux)](#pc-installation-windowsmacoslinux)
-6. [Server Installation](#server-installation)
-7. [Verification](#verification)
-8. [Next Steps](#next-steps)
+3. [Server Setup](#server-setup)
+4. [Device Setup](#device-setup)
+5. [PC Setup](#pc-setup)
+6. [Verification](#verification)
 
 ---
 
 ## Quick Start
 
-### One-Line Installation (PC)
+### The Simple Flow
 
-**Windows (PowerShell):**
-```powershell
-winget install -e --id Python.Python.3.11; pip install retrosync; retrosync setup
-```
+1. **Start the server** on a always-on machine
+2. **Install RetroSync client** on your handheld/PC
+3. **Launch RetroSync** on device - it generates a 6-digit code
+4. **Open http://SERVER_IP:4000** in browser
+5. **Create account** or login
+6. **Enter the 6-digit code** from your device
+7. **Done!** - Saves sync automatically
 
-**macOS (Terminal):**
+### One-Line Server Start (Docker)
+
 ```bash
-brew install python3 && pip3 install retrosync && retrosync setup
+# Start server on port 4000
+docker run -d -p 4000:4000 -v /home/alsinas/clawd/retrosync/data:/data retrosync/server
 ```
 
-**Linux (Ubuntu/Debian):**
+### One-Line Client Install (PC)
+
 ```bash
-sudo apt install python3-pip && pip3 install retrosync && retrosync setup
+pip3 install retrosync
+retrosync setup http://SERVER_IP:4000
 ```
-
-### 3-Step Process (All Platforms)
-
-1. **Install RetroSync** on your device
-2. **Create account** at your RetroSync server URL
-3. **Pair device** using the 6-digit code
 
 ---
 
 ## Prerequisites
 
-### General Requirements
+### For Server
 
-| Requirement | Minimum | Recommended |
-|-------------|---------|-------------|
-| Internet connection | Broadband | Broadband |
-| Storage space | 50MB | 100MB+ |
-| Server URL | - | Your RetroSync server |
+| Requirement | Minimum | Notes |
+|-------------|---------|-------|
+| Node.js | 18+ | For standalone server.js |
+| Storage | 100MB | For save files + database |
+| Network | Port 4000 open | For device connections |
+| Docker | Optional | For containerized deployment |
+
+### For Devices
+
+| Device | Requirements |
+|--------|-------------|
+| Anbernic RG35XX+ | WiFi, muOS |
+| Miyoo Flip | WiFi, Spruce OS, Python 3.9+ |
+| PC | Windows/macOS/Linux, Python 3.9+ |
+
+---
+
+## Server Setup
+
+### Option 1: Standalone Node.js Server (Recommended for development)
+
+```bash
+# Clone and run
+cd /home/alsinas/clawd/retrosync
+node server.js
+
+# Server runs on http://0.0.0.0:4000
+# Data stored in /home/alsinas/clawd/retrosync/data.json
+# Saves stored in /home/alsinas/clawd/retrosync/saves/
+```
+
+### Option 2: Docker
+
+```bash
+# Build image
+cd /home/alsinas/clawd/retrosync
+docker build -t retrosync-server .
+
+# Run container
+docker run -d \
+  -p 4000:4000 \
+  -v retrosync_data:/data \
+  -v retrosync_saves:/saves \
+  --name retrosync \
+  retrosync-server
+```
+
+### Option 3: Using the provided script
+
+```bash
+./start_server.sh
+```
+
+### Access Points
+
+| Service | URL | Purpose |
+|---------|-----|---------|
+| Web Dashboard | http://YOUR_IP:4000 | Login, pair devices |
+| API | http://YOUR_IP:4000/api/* | Device communication |
+
+---
+
+## Device Setup
 
 ### muOS (Anbernic RG35XX+)
 
-- Anbernic RG35XX+ handheld
-- muOS firmware updated to latest version
-- WiFi connectivity configured
-- SSH access enabled (optional, for advanced setup)
+#### Step 1: Connect to WiFi
+
+1. Go to **Settings → WiFi**
+2. Select your network
+3. Enter password
+
+#### Step 2: Install Python (if needed)
+
+```bash
+# SSH into device
+ssh root@DEVICE_IP
+
+# Install Python
+opkg update
+opkg install python3
+```
+
+#### Step 3: Install RetroSync
+
+**Option A: Copy files via SSH**
+```bash
+scp -r retrosync_client.py root@DEVICE_IP:/mnt/SDCARD/App/RetroSync/
+```
+
+**Option B: Download release**
+1. Copy `retrosync_client.py` to device
+2. Place in `/mnt/SDCARD/App/RetroSync/`
+
+#### Step 4: Run RetroSync
+
+```bash
+cd /mnt/SDCARD/App/RetroSync
+python3 retrosync_client.py
+```
+
+**What you'll see:**
+- 6-digit pairing code displayed on screen
+- Status: "Waiting for connection..."
+
+#### Step 5: Pair on Web Dashboard
+
+1. Open browser to `http://YOUR_SERVER_IP:4000`
+2. Click **"Get Started →"**
+3. Click **"Create an account"**
+4. Enter email and password
+5. Click **"Create Account"**
+6. Enter the **6-digit code** from your device
+7. Click **"Link Device"**
+
+#### Step 6: Verify Connection
+
+On device, status changes to:
+- **"CONNECTED!"** with your email
+- Press **A** to upload saves
 
 ### Spruce OS (Miyoo Flip)
 
-- Miyoo Flip handheld
-- Spruce OS updated to latest version
-- WiFi connectivity configured
-- Python 3.9+ (recommended) OR use shell client
+#### Step 1: Connect to WiFi
 
-### PC (Windows/macOS/Linux)
+1. Go to **Settings → WiFi**
+2. Select network
 
-| OS | Requirements |
-|----|-------------|
-| Windows | Windows 10+, Python 3.9+, pip |
-| macOS | macOS 11+, Python 3.9+, pip |
-| Linux | Ubuntu 20.04+ or equivalent, Python 3.9+, pip |
+#### Step 2: Check Python
+
+```bash
+# Check if Python is installed
+python3 --version
+
+# If not installed, download Python package for Spruce OS
+# Install via package manager
+```
+
+#### Step 3: Install RetroSync
+
+**Using USB or SSH:**
+```bash
+# Copy to device
+scp retrosync_client.py root@MIYOO_IP:/mnt/SDCARD/App/RetroSync/
+```
+
+#### Step 4: Run RetroSync
+
+```bash
+cd /mnt/SDCARD/App/RetroSync
+python3 retrosync_client.py
+```
+
+**Controls:**
+- **A** - Confirm / Upload saves
+- **B** - Cancel / Exit
+
+#### Step 5: Pair Device
+
+1. Open `http://YOUR_SERVER_IP:4000` on PC
+2. Create account / Login
+3. Enter 6-digit code from Miyoo screen
 
 ---
 
-## muOS Installation (Anbernic RG35XX+)
+## PC Setup
 
-### Option 1: Easy Installation (Recommended)
+### Windows
 
-1. **Connect to WiFi**
-   - Go to Settings → WiFi → Select network
-   - Note your server URL
+#### Step 1: Install Python
 
-2. **Download RetroSync**
-   - Copy `RetroSync.sh` to `/mnt/SDCARD/App/RetroSync/`
-   - Or use the built-in package installer if available
+```powershell
+# Download from https://python.org/downloads/
+# Run installer
+# ✓ Check "Add Python to PATH"
+```
 
-3. **Launch RetroSync**
-   - Go to Apps → RetroSync
-   - Select "Run Setup Wizard"
+#### Step 2: Install RetroSync
 
-4. **Follow Setup Wizard**
-   ```
-   Enter server URL: http://YOUR-SERVER-IP:3000
-   Choose pairing method: 2 (Enter code from web)
-   ```
+```cmd
+pip install retrosync
+```
 
-5. **Complete Pairing**
-   - Go to server URL in browser
-   - Login/create account
-   - Click "Add Device"
-   - Enter 6-digit code shown on device
+#### Step 3: Configure
 
-### Option 2: SSH Installation (Advanced)
+```cmd
+# Edit config or run setup
+retrosync setup http://YOUR_SERVER_IP:4000
+```
+
+#### Step 4: Start Daemon
+
+```cmd
+retrosync daemon
+```
+
+### macOS
 
 ```bash
-# SSH into your device
-ssh root@YOUR-DEVICE-IP
+# Install Python
+brew install python3
 
-# Create app directory
-mkdir -p /mnt/SDCARD/App/RetroSync
-cd /mnt/SDCARD/App/RetroSync
+# Install RetroSync
+pip3 install retrosync
 
-# Clone and install
-git clone https://github.com/al5ina5/retrosync.git
-cd retrosync/client
-
-# Install Python client
-pip3 install -e .
-
-# Run setup
-python3 -m retrosync setup http://YOUR-SERVER-IP:3000
+# Setup
+retrosync setup http://YOUR_SERVER_IP:4000
 
 # Start daemon
-python3 -m retrosync daemon &
+retrosync daemon
 ```
 
-### Save File Locations (muOS)
-
-| Emulator | Save Location |
-|----------|---------------|
-| RetroArch | `/mnt/SDCARD/RetroArch/saves/` |
-| Picodrive | `/mnt/SDCARD/Saves/picodrive/` |
-| Genesis Plus GX | `/mnt/SDCARD/Saves/genesis/` |
-| PPSSPP | `/mnt/SDCARD/PPSP/savedata/` |
-
----
-
-## Spruce OS Installation (Miyoo Flip)
-
-### Option 1: Python Client (Recommended)
-
-1. **Connect to WiFi**
-   - Settings → WiFi → Select network
-
-2. **Install Python 3** (if not installed)
-   - Download Python 3 package for Spruce OS
-   - Install via package manager
-
-3. **Download RetroSync**
-   ```bash
-   # Copy retrosync package to device
-   # Install via SSH or USB mass storage
-   cd /mnt/SDCARD/App/RetroSync
-   pip3 install retrosync-*.whl
-   ```
-
-4. **Run Setup**
-   ```bash
-   cd /mnt/SDCARD/App/RetroSync
-   python3 -m retrosync setup
-   ```
-
-5. **Follow Setup Wizard**
-   - Enter server URL
-   - Choose pairing option
-
-### Option 2: LÖVE App (Graphical)
-
-1. **Download RetroSync.love**
-   - Copy to `/mnt/SDCARD/App/RetroSync/RetroSync.love`
-
-2. **Launch from Apps Menu**
-   - RetroSync appears in Apps
-   - Launch the application
-
-3. **Setup via GUI**
-   - Enter server URL
-   - Follow on-screen instructions
-
-### Option 3: Shell Client (No Python)
-
-⚠️ **Experimental** - Shell client is incomplete
+### Linux
 
 ```bash
-cd /mnt/SDCARD/App/RetroSync/miyoo-shell
-./setup.sh http://YOUR-SERVER-IP:3000
-./daemon.sh
-```
+# Ubuntu/Debian
+sudo apt install python3-pip
+pip3 install retrosync
 
-### Save File Locations (Miyoo Flip)
+# Setup
+retrosync setup http://YOUR_SERVER_IP:4000
 
-| Emulator | Save Location |
-|----------|---------------|
-| RetroArch | `/mnt/SDCARD/RetroArch/saves/` |
-| MiyooOS Cores | `/mnt/SDCARD/Saves/` |
-| PocketStation | `/mnt/SDCARD/Saves/pocketsta/` |
-
----
-
-## PC Installation (Windows/macOS/Linux)
-
-### Windows Installation
-
-1. **Install Python**
-   - Download from https://python.org/downloads/
-   - Run installer (✓ Add Python to PATH)
-
-2. **Install RetroSync**
-   ```cmd
-   pip install retrosync
-   ```
-
-3. **Run Setup**
-   ```cmd
-   retrosync setup http://YOUR-SERVER-IP:3000
-   ```
-
-4. **Start Syncing**
-   ```cmd
-   retrosync daemon
-   ```
-
-### macOS Installation
-
-1. **Install Python**
-   ```bash
-   # Using Homebrew (recommended)
-   brew install python3
-
-   # Or download from python.org
-   ```
-
-2. **Install RetroSync**
-   ```bash
-   pip3 install retrosync
-   ```
-
-3. **Run Setup**
-   ```bash
-   retrosync setup http://YOUR-SERVER-IP:3000
-   ```
-
-4. **Start Syncing**
-   ```bash
-   retrosync daemon
-   ```
-
-### Linux Installation
-
-1. **Install Dependencies**
-   ```bash
-   # Ubuntu/Debian
-   sudo apt update
-   sudo apt install python3-pip python3-venv
-
-   # Fedora/RHEL
-   sudo dnf install python3-pip
-
-   # Arch
-   sudo pacman -S python-pip
-   ```
-
-2. **Install RetroSync**
-   ```bash
-   pip3 install retrosync
-
-   # Or for user installation
-   pip3 install --user retrosync
-   ```
-
-3. **Run Setup**
-   ```bash
-   retrosync setup http://YOUR-SERVER-IP:3000
-   ```
-
-4. **Start Syncing**
-   ```bash
-   retrosync daemon
-   ```
-
-### Auto-Start on Boot (Linux)
-
-```bash
-# Create systemd service
-sudo nano /etc/systemd/system/retrosync.service
-```
-
-```ini
-[Unit]
-Description=RetroSync Save Cloud
-After=network.target
-
-[Service]
-Type=simple
-User=YOUR_USERNAME
-ExecStart=/usr/local/bin/retrosync daemon
-Restart=on-failure
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl enable retrosync
-sudo systemctl start retrosync
+# Start daemon
+retrosync daemon
 ```
 
 ---
 
-## Server Installation
+## How Pairing Works (Under the Hood)
 
-### Quick Start (Docker)
-
-```bash
-# Clone and start
-git clone https://github.com/al5ina5/retrosync.git
-cd retrosync
-docker-compose up -d
-
-# Access:
-# - Web UI: http://localhost:3000
-# - MinIO Console: http://localhost:9001 (admin/admin)
 ```
-
-### Manual Installation
-
-```bash
-# Clone repository
-git clone https://github.com/al5ina5/retrosync.git
-cd retrosync
-
-# Setup backend
-cd backend
-cp .env.example .env
-# Edit .env with your settings
-
-npm install
-npx prisma generate
-npx prisma db push
-npm run build
-npm start
-```
-
-### Environment Variables
-
-```bash
-# .env
-DATABASE_URL="file:./prod.db"
-JWT_SECRET="$(openssl rand -hex 32)"
-MINIO_ENDPOINT="http://localhost:9000"
-MINIO_ROOT_USER="minioadmin"
-MINIO_ROOT_PASSWORD="minioadmin"
-MINIO_BUCKET="retrosync-saves"
-NEXT_PUBLIC_API_URL="http://localhost:3000"
-NODE_ENV="production"
+┌──────────┐                         ┌──────────┐
+│  Device  │                         │  Server  │
+└────┬─────┘                         └────┬─────┘
+     │                                    │
+     │  1. Generate random 6-digit code   │
+     │  (e.g., "123456")                  │
+     │                                    │
+     │  2. POST /api/register             │
+     │  {code: "123456", game_system: "miyoo-flip"} │
+     │◀───────────────────────────────────│
+     │  {"success": true}                 │
+     │                                    │
+     │  3. Display code on screen         │
+     │                                    │
+     │                                    │  4. User opens http://SERVER:4000
+     │                                    │  5. User creates account
+     │                                    │  6. User enters "123456"
+     │                                    │  7. POST /api/claim
+     │                                    │  {code: "123456", email: "user@email.com"}
+     │◀───────────────────────────────────│
+     │  8. Poll GET /api/status/123456    │
+     │◀───────────────────────────────────│
+     │  {"status": "CONNECTED", "email": "user@email.com"}
+     │                                    │
+     │  9. Device shows "CONNECTED!"      │
+     │  10. Press A to upload saves       │
+     │                                    │
+     │  11. POST /api/saves/upload        │
+     │  {code: "123456", filename: "game.srm", ...}
+     │───────────────────────────────────▶│
+     │                                    │  12. Save stored in /saves/123456/
 ```
 
 ---
 
 ## Verification
 
-### Check Installation
+### Check Server Status
 
 ```bash
-# Check RetroSync version
-retrosync --version
+# Check server is running
+curl http://localhost:4000/api/health
 
-# Check if running
+# Check registered devices
+curl http://localhost:4000/api/status/123456
+```
+
+### Check Client Status
+
+```bash
+# Check if daemon is running
 retrosync status
 
 # View logs
 cat ~/.retrosync/retrosync.log
+
+# Check connection
+retrosync check
 ```
-
-### Test Connection
-
-1. **Open web dashboard** at your server URL
-2. **Login** or create account
-3. **Check device status** - should show as "Offline" initially
-4. **Start daemon** on device:
-   ```bash
-   retrosync daemon
-   ```
-5. **Refresh dashboard** - device should show as "Online"
 
 ### Test Sync
 
-1. **Create test save file** or modify existing save
-2. **Watch logs** for upload:
-   ```bash
-   tail -f ~/.retrosync/retrosync.log
-   ```
-3. **Check dashboard** - save should appear in cloud saves
-4. **Test on another device** - download from cloud
-
----
-
-## Next Steps
-
-1. **[Create Account](USAGE.md#creating-an-account)** - Set up your RetroSync account
-2. **[Pair Devices](USAGE.md#pairing-devices)** - Connect your devices
-3. **[Configure Save Locations](USAGE.md#configuring-save-locations)** - Set up watch directories
-4. **[Learn How Sync Works](USAGE.md#how-sync-works)** - Understand the sync process
+1. **On device:** Make a game save
+2. **Check logs:** Should show upload
+3. **On server:** Check `/home/alsinas/clawd/retrosync/saves/CODE/`
+4. **On dashboard:** Visit `http://SERVER:4000` → Saves tab
 
 ---
 
@@ -415,18 +352,17 @@ cat ~/.retrosync/retrosync.log
 
 | Problem | Solution |
 |---------|----------|
-| "Command not found" | Ensure pip install completed successfully |
-| "Connection refused" | Check server URL and firewall |
-| "Device offline" | Start daemon: `retrosync daemon` |
-| "No saves found" | Configure save directory in settings |
+| "Connection refused" | Check server IP and port 4000 |
+| "Device not found" | Make sure device app is running |
+| "Invalid code" | Re-enter code from device screen |
+| "Account not found" | Create account on dashboard first |
 
-See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for detailed solutions.
+See [TROUBLESHOOTING.md](TROUBLESHOOTING.md) for more solutions.
 
 ---
 
 ## Related Documentation
 
-- [Usage Guide](USAGE.md)
-- [Compatibility List](COMPATIBILITY.md)
-- [Troubleshooting](TROUBLESHOOTING.md)
-- [Developer Guide](DEVELOPER.md)
+- [USAGE.md](USAGE.md) - How to use RetroSync after setup
+- [COMPATIBILITY.md](COMPATIBILITY.md) - Supported devices and save types
+- [TROUBLESHOOTING.md](TROUBLESHOOTING.md) - Common issues and solutions
