@@ -1,66 +1,30 @@
-import type { Config } from 'tailwindcss'
+import type { Config } from "tailwindcss";
+
+/** Classic Game Boy (DMG) 4-shade LCD green – keep in sync with src/lib/theme/gameboy.ts */
+const gameboy = {
+  darkest: "#0f380f",
+  dark: "#306230",
+  light: "#8bac0f",
+  lightest: "#9bbc0f",
+};
 
 const config: Config = {
   content: [
-    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
-    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    "./src/pages/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/components/**/*.{js,ts,jsx,tsx,mdx}",
+    "./src/app/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
       colors: {
-        background: 'var(--background)',
-        foreground: 'var(--foreground)',
-        vercel: {
-          black: '#000000',
-          white: '#ffffff',
-          gray: {
-            50: '#fafafa',
-            100: '#f5f5f5',
-            200: '#e5e5e5',
-            300: '#d4d4d4',
-            400: '#a3a3a3',
-            500: '#737373',
-            600: '#525252',
-            700: '#404040',
-            800: '#262626',
-            900: '#171717',
-            950: '#0a0a0a',
-          },
-          blue: {
-            50: '#eff6ff',
-            100: '#dbeafe',
-            200: '#bfdbfe',
-            300: '#93c5fd',
-            400: '#60a5fa',
-            500: '#3b82f6',
-            600: '#2563eb',
-            700: '#1d4ed8',
-            800: '#1e40af',
-            900: '#1e3a8a',
-          },
-        },
+        gameboy,
       },
       fontFamily: {
-        sans: ['var(--font-geist-sans)', 'system-ui', 'sans-serif'],
-        mono: ['var(--font-geist-mono)', 'monospace'],
-      },
-      animation: {
-        'fade-in': 'fadeIn 0.5s ease-in-out',
-        'slide-up': 'slideUp 0.3s ease-out',
-      },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0' },
-          '100%': { opacity: '1' },
-        },
-        slideUp: {
-          '0%': { transform: 'translateY(10px)', opacity: '0' },
-          '100%': { transform: 'translateY(0)', opacity: '1' },
-        },
+        gameboy: ['"Early GameBoy"', "monospace"],
+        minecraft: ['"Minecraft"', "monospace"],
       },
     },
   },
   plugins: [],
-}
-export default config
+};
+export default config;

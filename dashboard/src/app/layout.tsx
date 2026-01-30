@@ -1,19 +1,26 @@
-import type { Metadata } from 'next'
-import './globals.css'
+import type { Metadata } from "next";
+import "./globals.css";
+import { AppDataProvider } from "@/contexts";
+import { AppNav } from "@/components/AppNav";
 
 export const metadata: Metadata = {
-  title: 'RetroSync - Cloud Sync for Retro Gaming Saves',
-  description: 'Sync your retro gaming save files across Anbernic, Miyoo handhelds, and PC',
-}
+  title: "RetroSync",
+  description: "Sync your retro game saves",
+};
 
 export default function RootLayout({
   children,
-}: {
-  children: React.ReactNode
-}) {
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
-    <html lang="en" className="dark">
-      <body className="antialiased">{children}</body>
+    <html lang="en">
+      <body>
+        <AppDataProvider>
+          <AppNav />
+          {children}
+        </AppDataProvider>
+      </body>
     </html>
-  )
+  );
 }

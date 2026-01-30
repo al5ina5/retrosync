@@ -21,6 +21,7 @@
     "client:deploy": "npm run client:deploy:portmaster",
     "client:deploy:muos": "npm run client:deploy:portmaster:muos",
     "client:deploy:prod": "npm run client:deploy:portmaster:prod",
+    "client:deploy:all": "(npm run client:deploy:portmaster:prod || true) & (npm run client:deploy:portmaster:muos || true) & wait",
     "client:build:deploy": "npm run client:build:portmaster && npm run client:deploy:portmaster",
     "client:build:deploy:muos": "npm run client:build:portmaster && npm run client:deploy:portmaster:muos",
     "dev": "npm run dashboard:dev",

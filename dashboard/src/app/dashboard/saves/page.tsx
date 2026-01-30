@@ -413,8 +413,8 @@ export default function SavesPage() {
                                     : 'Each device keeps its own version; all backed up, no cross-device sync'
                                 }
                                 className={`rounded px-2 py-1 text-xs font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${isSelected
-                                    ? 'bg-vercel-blue-600 text-white'
-                                    : 'text-vercel-gray-300 hover:bg-vercel-gray-800 hover:text-vercel-white'
+                                  ? 'bg-vercel-blue-600 text-white'
+                                  : 'text-vercel-gray-300 hover:bg-vercel-gray-800 hover:text-vercel-white'
                                   }`}
                               >
                                 {label}
@@ -459,101 +459,120 @@ export default function SavesPage() {
                     </div>
                   </div>
 
-                  {/* Device locations with sync toggles */}
-                  <div className="space-y-2 mt-4 pt-4 border-t border-vercel-gray-800">
+                  {/* Group by device: each device = one version; paths under a device = same version, different paths */}
+                  <div className="space-y-3 mt-4 pt-4 border-t border-vercel-gray-800">
                     <p className="text-xs font-semibold text-vercel-gray-400 uppercase mb-2">
-                      Device Locations
+                      By device
                     </p>
                     {(() => {
-                      // First, sort locations so the newest one is at the top.
-                      const sortedLocations = [...save.locations].sort((a, b) => {
-                        // Prefer the backend's "isLatest" hint when it's consistent…
-                        if (a.isLatest && !b.isLatest) return -1
-                        if (!a.isLatest && b.isLatest) return 1
+                      const byDevice = new Map<string, SaveLocation[]>()
+                      for (const loc of save.locations) {
+                        const arr = byDevice.get(loc.deviceId) || []
+                        arr.push(loc)
+                        byDevice.set(loc.deviceId, arr)
+                      }
 
-                        // …but fall back to timestamps so we still get a stable order
-                        // even if multiple locations are flagged as latest.
-                        const aTime = new Date(
-                          a.modifiedAt ||
-                          a.uploadedAt ||
-                          a.latestModifiedAt ||
+                      const deviceIds = [...byDevice.keys()]
+                      deviceIds.sort((a, b) => {
+                        const locsA = byDevice.get(a)!
+                        const locsB = byDevice.get(b)!
+                        const repA = locsA[0]
+                        const repB = locsB[0]
+                        const timeA = new Date(
+                          repA.modifiedAt ||
+                          repA.uploadedAt ||
+                          repA.latestModifiedAt ||
                           save.lastModifiedAt ||
                           save.uploadedAt
                         ).getTime()
-                        const bTime = new Date(
-                          b.modifiedAt ||
-                          b.uploadedAt ||
-                          b.latestModifiedAt ||
+                        const timeB = new Date(
+                          repB.modifiedAt ||
+                          repB.uploadedAt ||
+                          repB.latestModifiedAt ||
                           save.lastModifiedAt ||
                           save.uploadedAt
                         ).getTime()
-                        return bTime - aTime
+                        return timeB - timeA
                       })
 
-                      // Only the first (newest) location should visually appear as "latest".
-                      const latestLocationId = sortedLocations[0]?.id
+                      const latestDeviceId = save.latestVersionDevice?.id ?? null
 
-                      return sortedLocations.map((location) => {
-                        const isVisuallyLatest = location.id === latestLocationId
+                      return deviceIds.map((deviceId) => {
+                        const locs = byDevice.get(deviceId)!
+                        const rep = locs[0]
+                        const isLatest = rep.deviceId === latestDeviceId
+                        const paths = locs.map((l) => l.localPath)
 
                         return (
                           <div
-                            key={location.id}
-                            className={`flex items-center justify-between p-2 rounded ${isVisuallyLatest
-                              ? 'bg-green-500/10 border border-green-500/30'
-                              : 'bg-vercel-gray-900/50'
+                            key={deviceId}
+                            className={`rounded-lg border p-3 ${isLatest
+                              ? 'bg-green-500/10 border-green-500/30'
+                              : 'bg-vercel-gray-900/50 border-vercel-gray-800'
                               }`}
                           >
-                            <div className="flex-1 min-w-0">
-                              <div className="flex items-center gap-2 mb-1">
-                                {isVisuallyLatest && (
-                                  <span className="text-green-400 font-semibold text-xs">✓ LATEST</span>
+                            <div className="flex items-center justify-between gap-2 mb-2">
+                              <div className="flex items-center gap-2 min-w-0">
+                                {isLatest && (
+                                  <span className="text-green-400 font-semibold text-xs shrink-0">
+                                    ✓ LATEST
+                                  </span>
                                 )}
-                                <span className="text-sm font-medium text-vercel-gray-300">
-                                  {location.deviceName}
+                                <span className="text-sm font-medium text-vercel-gray-300 truncate">
+                                  {rep.deviceName}
                                 </span>
-                                <button
-                                  type="button"
-                                  onClick={() =>
-                                    handleDownload(save.saveKey, save.displayName, location.deviceId)
-                                  }
-                                  disabled={
-                                    downloading === buildDownloadKey(save.saveKey, location.deviceId)
-                                  }
-                                  className="inline-flex h-6 w-6 items-center justify-center rounded-full border border-vercel-gray-700 bg-vercel-gray-900 text-[10px] text-vercel-gray-200 hover:bg-vercel-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
-                                  aria-label={`Download save for ${location.deviceName} (${location.deviceType})`}
-                                  title={`Download save for ${location.deviceName} (${location.deviceType})`}
-                                >
-                                  ↓
-                                </button>
                               </div>
-                              <p className="text-xs text-vercel-gray-400 truncate">{location.localPath}</p>
-                              {(location.modifiedAt ||
-                                location.uploadedAt ||
-                                location.latestModifiedAt ||
-                                save.lastModifiedAt ||
-                                save.uploadedAt) && (
-                                  <p
-                                    className={`text-xs mt-1 ${isVisuallyLatest ? 'text-green-400/80' : 'text-vercel-gray-400'
-                                      }`}
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  handleDownload(save.saveKey, save.displayName, rep.deviceId)
+                                }
+                                disabled={
+                                  downloading === buildDownloadKey(save.saveKey, rep.deviceId)
+                                }
+                                className="shrink-0 inline-flex h-7 w-7 items-center justify-center rounded-full border border-vercel-gray-700 bg-vercel-gray-900 text-[10px] text-vercel-gray-200 hover:bg-vercel-gray-800 disabled:opacity-50 disabled:cursor-not-allowed"
+                                aria-label={`Download this device's version`}
+                                title={`Download save for ${rep.deviceName}`}
+                              >
+                                ↓
+                              </button>
+                            </div>
+                            {(rep.modifiedAt ||
+                              rep.uploadedAt ||
+                              rep.latestModifiedAt ||
+                              save.lastModifiedAt ||
+                              save.uploadedAt) && (
+                                <p
+                                  className={`text-xs mb-2 ${isLatest ? 'text-green-400/80' : 'text-vercel-gray-400'
+                                    }`}
+                                >
+                                  Modified:{' '}
+                                  {formatShortDateTime(
+                                    rep.modifiedAt ||
+                                    rep.latestModifiedAt ||
+                                    save.lastModifiedAt ||
+                                    save.uploadedAt
+                                  )}
+                                  {rep.uploadedAt && (
+                                    <> • Uploaded: {formatRelativeOrShort(rep.uploadedAt)}</>
+                                  )}
+                                </p>
+                              )}
+                            <div className="mt-1">
+                              <p className="text-[11px] text-vercel-gray-500 uppercase tracking-wide mb-1">
+                                {paths.length === 1 ? 'Path' : 'Paths (same version)'}
+                              </p>
+                              <ul className="space-y-0.5">
+                                {paths.map((p, i) => (
+                                  <li
+                                    key={i}
+                                    className="text-xs text-vercel-gray-400 font-mono truncate pl-1"
+                                    title={p}
                                   >
-                                    <>
-                                      Modified:{' '}
-                                      {formatShortDateTime(
-                                        location.modifiedAt ||
-                                        location.latestModifiedAt ||
-                                        save.lastModifiedAt ||
-                                        save.uploadedAt
-                                      )}
-                                    </>
-                                    {location.uploadedAt && (
-                                      <>
-                                        {' '}
-                                        • Uploaded: {formatRelativeOrShort(location.uploadedAt)}
-                                      </>
-                                    )}
-                                  </p>
-                                )}
+                                    {p}
+                                  </li>
+                                ))}
+                              </ul>
                             </div>
                           </div>
                         )

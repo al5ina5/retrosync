@@ -2,48 +2,53 @@
 @tailwind components;
 @tailwind utilities;
 
+/* Early GameBoy Regular – free font with proper metrics (centers correctly) */
+@font-face {
+    font-family: "Early GameBoy";
+    font-style: normal;
+    font-weight: normal;
+    font-display: swap;
+    src: local("Early GameBoy Regular"),
+        url("https://db.onlinewebfonts.com/t/3ada9815c06d2619d52d16a5601c96b2.woff2") format("woff2"),
+        url("https://db.onlinewebfonts.com/t/3ada9815c06d2619d52d16a5601c96b2.woff") format("woff");
+}
+
+/* Minecraft-style pixel font (public/fonts/Minecraft.ttf) */
+@font-face {
+    font-family: "Minecraft";
+    src: url("/fonts/Minecraft.ttf") format("truetype");
+    font-weight: normal;
+    font-style: normal;
+    font-display: swap;
+}
+
+/* Game Boy palette as CSS vars (use in custom CSS or JS) */
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-  --font-geist-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', 'Fira Sans', 'Droid Sans', 'Helvetica Neue', sans-serif;
-  --font-geist-mono: 'SF Mono', Monaco, 'Cascadia Code', 'Roboto Mono', Consolas, 'Courier New', monospace;
+    --gameboy-darkest: #0f380f;
+    --gameboy-dark: #306230;
+    --gameboy-light: #8bac0f;
+    --gameboy-lightest: #9bbc0f;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
-html {
-  color-scheme: dark;
-}
-
+html,
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: var(--font-geist-sans);
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+    @apply font-gameboy bg-gameboy-lightest text-gameboy-darkest;
 }
 
-@media (prefers-reduced-motion: reduce) {
-  *,
-  *::before,
-  *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-  }
-}
-
+/* Green text glow (uses Game Boy palette) */
 @layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
-  
-  .text-pretty {
-    text-wrap: pretty;
-  }
+    .text-glow {
+        text-shadow:
+            0 0 0.2em var(--gameboy-lightest),
+            0 0 0.4em var(--gameboy-light),
+            0 0 0.6em var(--gameboy-light);
+    }
+
+    .text-glow-strong {
+        text-shadow:
+            0 0 0.3em var(--gameboy-lightest),
+            0 0 0.6em var(--gameboy-light),
+            0 0 1em var(--gameboy-light),
+            0 0 1.5em var(--gameboy-dark);
+    }
 }
