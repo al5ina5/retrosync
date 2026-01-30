@@ -28,24 +28,28 @@ export default function HomePage() {
         </div>
       </div>
 
-      <div className="space-y-6">
-        <div className="text-center space-y-2">
-          <p>Supported Devices</p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {['Computer', 'Ambernic', 'Miyoo Flip'].map((device =>
-              <div key={device} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
-                {device}
-              </div>
-            ))}
+      <div className="text-center space-y-6">
+        <p className="font-medium">Compatibility</p>
+        <div className="flex flex-col gap-4 items-center">
+          <div className="space-y-2">
+            <p className="text-sm text-gameboy-darkest/80">Devices</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {['Computer', 'Ambernic', 'Miyoo Flip'].map((device) => (
+                <div key={device} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
+                  {device}
+                </div>
+              ))}
+            </div>
           </div>
-        </div><div className="text-center space-y-2">
-          <p>Supported Operating Systems</p>
-          <div className="flex flex-wrap gap-2 justify-center">
-            {['MacOS', 'Windows', 'Linux', 'muOS', 'spruceOS'].map((device =>
-              <div key={device} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
-                {device}
-              </div>
-            ))}
+          <div className="space-y-2">
+            <p className="text-sm text-gameboy-darkest/80">Operating systems</p>
+            <div className="flex flex-wrap gap-2 justify-center">
+              {['MacOS', 'Windows', 'Linux', 'muOS', 'spruceOS'].map((os) => (
+                <div key={os} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
+                  {os}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
       </div>
