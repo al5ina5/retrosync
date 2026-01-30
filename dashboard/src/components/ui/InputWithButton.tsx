@@ -31,7 +31,8 @@ export function InputWithButton({
   id: idProp,
   ...inputProps
 }: InputWithButtonProps) {
-  const id = idProp ?? React.useId();
+  const generatedId = React.useId();
+  const id = idProp ?? generatedId;
   const buttonDisabled = disabled || loading;
 
   const handleSubmit = (e: React.FormEvent) => {
