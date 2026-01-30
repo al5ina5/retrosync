@@ -2,12 +2,17 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Early GameBoy Regular – free font with proper metrics (centers correctly) */
+/* Fallback pixel font – full punctuation (parentheses, etc.) when Early GameBoy lacks a glyph */
+@import url("https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap");
+
+/* Early GameBoy Regular – free font with proper metrics (centers correctly).
+   unicode-range excludes parentheses ( ) so they render via Press Start 2P fallback. */
 @font-face {
     font-family: "Early GameBoy";
     font-style: normal;
     font-weight: normal;
     font-display: swap;
+    unicode-range: U+0000-0027, U+002A-10FFFF;
     src: local("Early GameBoy Regular"),
         url("https://db.onlinewebfonts.com/t/3ada9815c06d2619d52d16a5601c96b2.woff2") format("woff2"),
         url("https://db.onlinewebfonts.com/t/3ada9815c06d2619d52d16a5601c96b2.woff") format("woff");

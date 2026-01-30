@@ -1,31 +1,50 @@
 "use client";
 
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { useAuth } from "@/hooks";
+import clsx from "clsx";
+
+const activeLinkClass = "bg-gameboy-darkest text-gameboy-lightest";
 
 const RenderLinks = () => {
-  const { isAuthenticated, isLoading, logout } = useAuth({
+  const pathname = usePathname();
+  const { isAuthenticated, isLoading } = useAuth({
     redirectOnUnauthenticated: false,
   });
-  return <>
-    <Link href="/">Home</Link>
-    {
-      isLoading ? null : isAuthenticated ? (
-        <>
-          <Link href="/devices">Devices</Link>
-          <Link href="/saves">Saves</Link>
-          <Link href="/account">Account</Link>
-        </>
-      ) : (
-        <Link href="/auth">Sign Up</Link>
-      )
-    }</>
-}
-export function AppNav() {
+
+  const isActive = (href: string) =>
+    href === "/" ? pathname === "/" : pathname.startsWith(href);
 
   return (
     <>
-      <div className="hidden md:flex max-w-xl mx-auto p-12 lg:pt-24 pb-0 space-x-4 items-center justify-center">
+      <Link href="/" className={clsx(isActive("/") && activeLinkClass)}>
+        Home
+      </Link>
+      {isLoading ? null : isAuthenticated ? (
+        <>
+          <Link href="/devices" className={clsx(isActive("/devices") && activeLinkClass)}>
+            Devices
+          </Link>
+          <Link href="/saves" className={clsx(isActive("/saves") && activeLinkClass)}>
+            Saves
+          </Link>
+          <Link href="/account" className={clsx(isActive("/account") && activeLinkClass)}>
+            Account
+          </Link>
+        </>
+      ) : (
+        <Link href="/auth" className={clsx(isActive("/auth") && activeLinkClass)}>
+          Sign Up
+        </Link>
+      )}
+    </>
+  );
+};
+export function AppNav() {
+  return (
+    <>
+      <div className="hidden md:flex max-w-xl mx-auto p-12 lg:pt-24 pb-0 items-center justify-center *:px-4 *:py-2">
         <RenderLinks />
       </div>
 

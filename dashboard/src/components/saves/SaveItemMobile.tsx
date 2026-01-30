@@ -34,14 +34,49 @@ export function SaveItemMobile({
 }: SaveItemMobileProps) {
   return (
     <div className="md:hidden">
-      <div className="flex">
-        <p className="p-2 px-4 truncate flex-1">
+      <div className="border-t-2 border-gameboy-lightest flex justify-end text-xs">
+        <div
+          className="p-2 px-4 border-r-2 border-gameboy-lightest">
+
+        </div>
+        <div
+          className="p-2 px-4 border-r-2 border-gameboy-lightest"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            aria-label={isDownloading ? "Downloading…" : "Download"}
+            disabled={isDownloading}
+            onClick={() => onDownload?.(save.saveKey, save.displayName)}
+            className="disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            Download
+            {/* <Download size={20} /> */}
+          </button>
+        </div>
+        <div
+          className="flex p-2 px-4 gap-2 items-center"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Toggle
+            label="Sync"
+            checked={syncEnabled}
+            onChange={onSyncChange}
+            disabled={isUpdating}
+            aria-label={syncEnabled ? "Sync shared (on)" : "Sync per device (off)"}
+          />
+        </div>
+      </div>
+
+      <div className="border-t-2 border-gameboy-lightest flex">
+
+        <p className="p-2 px-4 flex-1">
           {save.displayName}
         </p>
 
       </div>
 
-      <div className="flex border-t-2 border-gameboy-lightest">
+      {/* <div className="flex border-t-2 border-gameboy-lightest">
         <div
           className=" p-2 px-4 border-r-2 border-gameboy-lightest"
           onClick={(e) => e.stopPropagation()}
@@ -57,11 +92,11 @@ export function SaveItemMobile({
           </button>
         </div>
         <div
-          className="flex  gap-2 p-2 px-4 border-r-2 border-gameboy-lightest"
+          className="flex gap-2 p-2 px-4 border-r-2 border-gameboy-lightest"
           onClick={(e) => e.stopPropagation()}
         >
-          <p>Sync</p>
           <Toggle
+            label="Sync"
             checked={syncEnabled}
             onChange={onSyncChange}
             disabled={isUpdating}
@@ -69,10 +104,10 @@ export function SaveItemMobile({
           />
         </div>
         <button className="px-4">Expand</button>
-      </div>
+      </div> */}
 
-      <div className="text-xs whitespace-nowrap border-t-2 border-gameboy-lightest flex">
-        <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
+      <div className="text-xs whitespace-nowrap border-t-2 border-gameboy-lightest fle justify-center text-center">
+        <p className="p-2 px-4">
           {formatRelativeTime(save.uploadedAt ?? save.lastModifiedAt)}
         </p>
       </div>

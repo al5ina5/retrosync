@@ -20,7 +20,8 @@ const config: Config = {
         gameboy,
       },
       fontFamily: {
-        gameboy: ['"Early GameBoy"', "monospace"],
+        /* Press Start 2P used for missing glyphs (parentheses, etc.) in Early GameBoy */
+        gameboy: ['"Early GameBoy"', '"Press Start 2P"', "monospace"],
         minecraft: ['"Minecraft"', "monospace"],
       },
     },
