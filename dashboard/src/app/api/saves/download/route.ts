@@ -19,47 +19,41 @@ export async function GET(request: NextRequest) {
       return errorResponse('filePath query parameter is required', 400)
     }
 
-    // Get all devices for this user
-    const devices = await prisma.device.findMany({
-      where: { userId: user.userId },
-      select: { id: true },
-    })
-
-    const deviceIds = devices.map((d) => d.id)
-    if (deviceIds.length === 0) {
-      return errorResponse('No devices found for user', 404)
-    }
-
-    // If a specific deviceId is provided, ensure it belongs to the user.
-    if (deviceId && !deviceIds.includes(deviceId)) {
-      return unauthorizedResponse('Device does not belong to user')
-    }
-
-    // Find the most recent successful upload for this filePath.
-    // If deviceId is provided, limit to that device; otherwise, search across all.
-    const latest = await prisma.syncLog.findFirst({
+    // filePath from the dashboard is Save.saveKey (same value used in the saves list).
+    // Find the Save for this user and get the latest version's storageKey (actual S3 key).
+    const save = await prisma.save.findFirst({
       where: {
-        deviceId: deviceId ? deviceId : { in: deviceIds },
-        filePath,
-        action: 'upload',
-        status: 'success',
+        userId: user.userId,
+        saveKey: filePath,
       },
-      orderBy: { createdAt: 'desc' },
-      select: { deviceId: true },
+      select: { id: true, displayName: true },
     })
 
-    if (!latest) {
+    if (!save) {
       return errorResponse('Save file not found', 404)
     }
 
-    // Construct S3 key: userId/deviceId/filePath
-    const sanitizedPath = filePath.replace(/^\//, '')
-    if (sanitizedPath.includes('..')) {
-      return errorResponse('Invalid file path', 400)
-    }
-    const s3Key = `${user.userId}/${latest.deviceId}/${sanitizedPath}`
+    // If deviceId is provided, ensure it belongs to the user and get that device's latest version.
+    const latestVersion = await prisma.saveVersion.findFirst({
+      where: {
+        saveId: save.id,
+        ...(deviceId
+          ? { deviceId, device: { userId: user.userId } }
+          : { device: { userId: user.userId } }),
+      },
+      orderBy: { uploadedAt: 'desc' },
+      select: { storageKey: true },
+    })
 
-    const url = getPresignedUrl(s3Key, 60 * 10) // 10 minutes
+    if (!latestVersion) {
+      return errorResponse('Save file not found', 404)
+    }
+
+    const url = getPresignedUrl(
+      latestVersion.storageKey,
+      60 * 10,
+      save.displayName
+    )
 
     return successResponse({ url })
   } catch (error) {

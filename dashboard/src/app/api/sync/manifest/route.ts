@@ -156,6 +156,7 @@ export async function GET(request: NextRequest) {
         saveId: loc.saveId,
         saveKey: loc.save.saveKey,
         displayName: loc.save.displayName,
+        // Each device has its own localPath (e.g. .sav on macOS, .srm on MUOS/RetroArch); download uses this path.
         localPath: loc.localPath,
         deviceType: loc.deviceType,
         needsMapping: false, // This device knows where to save this file

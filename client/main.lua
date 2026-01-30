@@ -44,6 +44,7 @@ local CODE_FILE = DATA_DIR .. "/code"
 local LOG_FILE = DATA_DIR .. "/debug.log"
 local SERVER_URL_FILE = DATA_DIR .. "/server_url"
 local HISTORY_FILE = DATA_DIR .. "/device_history.json"
+local CUSTOM_PATHS_FILE = DATA_DIR .. "/custom_paths.txt"
 
 -- Optional background process helper scripts (run from SETTINGS screen)
 -- Drop these scripts next to the app (.love) or in the app directory.
@@ -78,6 +79,7 @@ local uploadCancelled = false  -- Flag to cancel upload
 local uploadPending = false  -- Flag to defer upload to next frame
 local uploadJustStarted = false  -- Flag to prevent immediate cancellation
 local uploadDiscoverPending = false  -- Show SYNCING first frame, then discover files
+local weStartedWatcher = false  -- True if this process started the watcher (macOS); we stop it on quit
 local uploadInProgress = false  -- Per-file upload phase (one file per frame)
 local uploadQueue = {}  -- Paths to upload (filled after discover)
 local uploadNextIndex = 1  -- Next file to upload (1-based)
@@ -115,6 +117,13 @@ local settingsStatusMessage = ""
 local deviceHistory = {}  -- newest-first array of { ts, direction, name, path, size, device }
 local historySelectedIndex = 1
 local historyScroll = 0
+
+-- Custom trackable paths (drag-and-drop on Mac/Windows); persisted to CUSTOM_PATHS_FILE
+local customTrackablePaths = {}
+-- PATH ADDED overlay: show for 2 seconds after dropping a folder/file
+local pathAddedMessage = nil   -- path string shown in overlay
+local pathAddedAt = nil       -- love.timer.getTime() when shown
+local PATH_ADDED_DURATION = 2
 
 -- Home intro animation (CONNECTED and SHOWING_CODE)
 local homeIntroTimer = 0
@@ -229,6 +238,8 @@ function love.load()
     consolidateLogs()
     -- Load device-local history (if present)
     loadDeviceHistory()
+    -- Load custom trackable paths (drag-and-drop on Mac/Windows)
+    loadCustomPaths()
     
     -- Initialize logging
     logMessage("=== RetroSync App Started ===")
@@ -265,6 +276,123 @@ function love.load()
             -- First run - get code from server
             getCodeFromServer()
         end
+    end
+
+    -- On macOS: start the watcher when the app opens so we get clear lifecycle logs
+    -- (watcher writes to data/watcher.log: "watcher: started" / "watcher: exiting")
+    if love.system and love.system.getOS and love.system.getOS() == "OS X" then
+        local watcherPath = APP_DIR .. "/watcher.sh"
+        local f = io.open(watcherPath, "r")
+        if f then
+            f:close()
+            local escapedApp = APP_DIR:gsub("'", "'\\''")
+            local escapedData = DATA_DIR:gsub("'", "'\\''")
+            -- Run watcher in background; it writes PID to data/watcher.pid and logs to data/watcher.log
+            local cmd = "cd '" .. escapedApp .. "' && nohup ./watcher.sh >> '" .. escapedData .. "/watcher_stdout.log' 2>&1 &"
+            logMessage("macOS: starting watcher: " .. cmd)
+            local ok = os.execute(cmd)
+            if ok then
+                weStartedWatcher = true
+                logMessage("macOS: watcher start requested (check data/watcher.log for 'watcher: started')")
+            else
+                logMessage("macOS: watcher start command failed")
+            end
+        else
+            logMessage("macOS: watcher.sh not found at " .. watcherPath .. " (skipping watcher start)")
+        end
+    end
+end
+
+function love.quit()
+    if weStartedWatcher then
+        local pidFile = DATA_DIR .. "/watcher.pid"
+        local f = io.open(pidFile, "r")
+        if f then
+            local pid = f:read("*l")
+            f:close()
+            if pid and pid ~= "" then
+                logMessage("macOS: stopping watcher (pid=" .. pid .. ")")
+                os.execute("kill " .. pid .. " 2>/dev/null")
+            end
+        end
+    end
+    logMessage("=== RetroSync App Closing ===")
+end
+
+-- Normalize path for dedup: strip trailing slash, ensure one form
+local function normalizePathForCustom(path)
+    if not path or path == "" then
+        return nil
+    end
+    path = path:match("^%s*(.-)%s*$")
+    if path == "" then
+        return nil
+    end
+    if path:sub(-1) == "/" then
+        path = path:sub(1, -2)
+    end
+    return path
+end
+
+local function addTrackablePath(path)
+    local norm = normalizePathForCustom(path)
+    if not norm then
+        return false
+    end
+    for _, p in ipairs(customTrackablePaths) do
+        if p == norm then
+            return false
+        end
+    end
+    table.insert(customTrackablePaths, norm)
+    saveCustomPaths()
+    logMessage("Custom path added: " .. norm)
+    return true
+end
+
+-- Drag-and-drop: directory dropped onto window (Mac/Windows)
+function love.directorydropped(path)
+    logMessage("directorydropped: " .. tostring(path))
+    if type(path) ~= "string" or path == "" then
+        return
+    end
+    if addTrackablePath(path) then
+        pathAddedMessage = path
+        pathAddedAt = love.timer.getTime()
+    end
+end
+
+-- Drag-and-drop: file dropped onto window; we add its parent directory (Mac/Windows)
+function love.filedropped(file)
+    local path = nil
+    if type(file) == "string" then
+        path = file
+    elseif type(file) == "table" or type(file) == "userdata" then
+        local ok, result = pcall(function()
+            if file.getFilename then
+                return file:getFilename()
+            end
+            return nil
+        end)
+        if ok and result and type(result) == "string" then
+            path = result
+        end
+    end
+    if not path or path == "" then
+        logMessage("filedropped: could not get path from dropped file")
+        if type(file) == "userdata" and file.release then
+            pcall(function() file:release() end)
+        end
+        return
+    end
+    -- Parent directory: support both / and \ (Windows)
+    local dir = path:match("(.*)/") or path:match("(.*)\\[^\\]*$") or path
+    if addTrackablePath(dir) then
+        pathAddedMessage = dir
+        pathAddedAt = love.timer.getTime()
+    end
+    if type(file) == "userdata" and file.release then
+        pcall(function() file:release() end)
     end
 end
 
@@ -882,18 +1010,6 @@ function love.draw()
         love.graphics.setFont(codeFont)
         local statusY = topY + countHeight + gapCountToLabel + labelHeight + gapLabelToStatus
         love.graphics.printf(statusText, 0, statusY, screenWidth, "center")
-        
-        -- Show message about unmapped saves (from other devices)
-        if unmappedSavesCount > 0 and currentState == STATE_SUCCESS then
-            love.graphics.setColor(1, 0.9, 0.5)  -- Yellow/orange for info
-            love.graphics.setFont(codeFont)
-            local unmappedY = statusY + codeFont:getHeight() + 20
-            local unmappedMsg = unmappedSavesCount .. " save" .. (unmappedSavesCount > 1 and "s" or "") .. " available from other devices"
-            love.graphics.printf(unmappedMsg, 0, unmappedY, screenWidth, "center")
-            love.graphics.setColor(0.8, 0.8, 0.8)  -- Gray for hint
-            local hintY = unmappedY + codeFont:getHeight() + 10
-            love.graphics.printf("Run the game once to enable syncing", 0, hintY, screenWidth, "center")
-        end
     end
     
     -- Show error if any (only for non-showing-code states)
@@ -901,6 +1017,24 @@ function love.draw()
         love.graphics.setColor(1, 0.3, 0.3)
         love.graphics.setFont(codeFont)
         love.graphics.printf(pairingError, 0, 460, screenWidth, "center")
+    end
+
+    -- PATH ADDED overlay (2 seconds after dropping folder/file onto window)
+    if pathAddedAt and (love.timer.getTime() - pathAddedAt) < PATH_ADDED_DURATION then
+        love.graphics.setColor(0, 0, 0, 0.75)
+        love.graphics.rectangle("fill", 0, 0, screenWidth, screenHeight)
+        love.graphics.setColor(1, 1, 1)
+        love.graphics.setFont(titleFont)
+        love.graphics.printf("PATH ADDED", 0, screenHeight / 2 - 70, screenWidth, "center")
+        love.graphics.setFont(deviceFont)
+        local displayPath = pathAddedMessage or ""
+        if #displayPath > 52 then
+            displayPath = "..." .. displayPath:sub(-49, -1)
+        end
+        love.graphics.printf(displayPath, 24, screenHeight / 2 - 10, screenWidth - 48, "center")
+    elseif pathAddedAt then
+        pathAddedAt = nil
+        pathAddedMessage = nil
     end
 end
 
@@ -2376,6 +2510,16 @@ local function normalizePathForMatch(path)
     return path:gsub("/%.netplay/", "/")
 end
 
+-- Normalize battery-save key so .sav and .srm match (same format, different platform extension).
+-- Server uses the same rule so cloud saveKey may be "Game.sav" while local file is "Game.srm".
+local function normalizeBatterySaveKeyForMatch(name)
+    if not name or name == "" then return name end
+    if name:sub(-4) == ".srm" then
+        return name:sub(1, -5) .. ".sav"
+    end
+    return name
+end
+
 function doUploadDiscover()
     logMessage("=== doUploadDiscover START ===")
     local ok, err = pcall(function()
@@ -2431,11 +2575,15 @@ function doUploadDiscover()
                         end
                     end
                     
-                    -- Map by saveKey (filename) for cross-emulator detection
+                    -- Map by saveKey (extension-agnostic on server) for cross-emulator detection
+                    -- Server sends saveKey without .sav/.srm; key by base and by base+ext so local filename finds it
                     local saveKey = item.saveKey
                     if saveKey and saveKey ~= "" then
-                        if not cloudBySaveKey[saveKey] or (cloudMs and cloudMs > (cloudBySaveKey[saveKey].cloudMs or 0)) then
-                            cloudBySaveKey[saveKey] = {cloudMs = cloudMs, byteSize = byteSize, contentHash = contentHash}
+                        local entry = {cloudMs = cloudMs, byteSize = byteSize, contentHash = contentHash}
+                        for _, k in ipairs({ saveKey, saveKey .. ".sav", saveKey .. ".srm" }) do
+                            if not cloudBySaveKey[k] or (cloudMs and cloudMs > (cloudBySaveKey[k].cloudMs or 0)) then
+                                cloudBySaveKey[k] = entry
+                            end
                         end
                     end
                 end
@@ -2461,7 +2609,8 @@ function doUploadDiscover()
             local normPath = normalizePathForMatch(fpath)
             local cloudEntry = cloudByPath[fpath] or cloudByPath[normPath]
             local filename = fpath:match("[^/]+$")
-            local saveKeyEntry = cloudBySaveKey[filename]
+            -- Server normalizes .srm <-> .sav to same save; look up by both names
+            local saveKeyEntry = cloudBySaveKey[filename] or cloudBySaveKey[normalizeBatterySaveKeyForMatch(filename)]
             local localMtime = getFileMtimeSeconds(fpath)
             local localMs = localMtime and (localMtime * 1000) or nil
             local needUpload = true
@@ -2632,8 +2781,8 @@ function uploadSave(filepath)
         return false
     end
     
-    logMessage("uploadSave: Extracting filename from path")
-    local filename = filepath:match("/([^/]+)$") or filepath
+    -- Always send basename for filePath so server matches by game, not path (/ and \ for Windows)
+    local filename = filepath:match("[/\\]([^/\\]+)$") or filepath
     logMessage("uploadSave: filename = " .. tostring(filename))
     
     local fileSize = 0
@@ -2742,8 +2891,9 @@ function uploadSave(filepath)
         local escapedTempFile = tempFile:gsub("'", "'\\''")
         logMessage("uploadSave: Escaped temp file path")
         
-        -- Base64 encode using shell command
-        local cmd = "base64 '" .. escapedTempFile .. "' 2>/dev/null"
+        -- Base64 encode using shell command. Use stdin redirection so it works on both
+        -- GNU base64 (Linux) and BSD base64 (macOS), which does not accept a file path argument.
+        local cmd = "base64 < '" .. escapedTempFile .. "' 2>/dev/null"
         logMessage("uploadSave: Executing base64 command")
         local handle = io.popen(cmd)
         if not handle then
@@ -2912,7 +3062,14 @@ function findSaveFiles()
             table.insert(locations, home .. "/Library/Application Support/OpenEmu")
         end
     end
-    
+
+    -- Custom paths added via drag-and-drop (Mac/Windows)
+    for _, p in ipairs(customTrackablePaths) do
+        if p and p ~= "" then
+            table.insert(locations, p)
+        end
+    end
+
     logMessage("findSaveFiles: Searching " .. #locations .. " locations")
     
     for idx, loc in ipairs(locations) do
@@ -3043,6 +3200,49 @@ function saveDeviceName(name)
     if file then
         file:write(name)
         file:close()
+    end
+end
+
+-- Custom trackable paths (drag-and-drop on Mac/Windows); persisted to CUSTOM_PATHS_FILE
+function loadCustomPaths()
+    customTrackablePaths = {}
+    local file = io.open(CUSTOM_PATHS_FILE, "r")
+    if not file then
+        logMessage("loadCustomPaths: no file at " .. CUSTOM_PATHS_FILE .. " (ok on first run)")
+        return
+    end
+    for line in file:lines() do
+        line = line:match("^%s*(.-)%s*$")
+        if line and line ~= "" then
+            if line:sub(-1) == "/" then
+                line = line:sub(1, -2)
+            end
+            table.insert(customTrackablePaths, line)
+        end
+    end
+    file:close()
+    logMessage("loadCustomPaths: loaded " .. #customTrackablePaths .. " paths from " .. CUSTOM_PATHS_FILE)
+end
+
+function saveCustomPaths()
+    pcall(function()
+        os.execute("mkdir -p '" .. DATA_DIR .. "' 2>/dev/null")
+        if love.system and love.system.getOS then
+            local osname = love.system.getOS()
+            if osname == "Windows" then
+                os.execute('mkdir "' .. DATA_DIR:gsub("/", "\\") .. '" 2>nul')
+            end
+        end
+    end)
+    local file = io.open(CUSTOM_PATHS_FILE, "w")
+    if file then
+        for _, p in ipairs(customTrackablePaths) do
+            file:write(p .. "\n")
+        end
+        file:close()
+        logMessage("saveCustomPaths: saved " .. #customTrackablePaths .. " paths to " .. CUSTOM_PATHS_FILE)
+    else
+        logMessage("saveCustomPaths: failed to open " .. CUSTOM_PATHS_FILE .. " for writing")
     end
 end
 

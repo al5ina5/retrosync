@@ -87,7 +87,7 @@ export default function SavesPage() {
   useEffect(() => {
     const token = localStorage.getItem('token')
     if (!token) {
-      router.push('/auth/login')
+      router.push('/auth')
     }
   }, [router])
 
@@ -376,7 +376,7 @@ export default function SavesPage() {
                         {formatFileSize(save.fileSize)} •{' '}
                         <span>
                           Modified:{' '}
-                          {formatShortDateTime(save.lastModifiedAt || save.uploadedAt)}
+                          {formatShortDateTime(save.uploadedAt || save.lastModifiedAt)}
                         </span>
                         {save.uploadedAt && (
                           <>

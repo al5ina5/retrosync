@@ -93,12 +93,6 @@ export async function GET(request: NextRequest) {
       const latestVersion = save.versions[0]
       const latestDeviceId = latestVersion?.device?.id || null
 
-      // Sanitize the latest version's timestamp
-      const fallbackDate = latestVersion?.uploadedAt || save.updatedAt
-      const sanitizedLocalModifiedAt = latestVersion
-        ? sanitizeTimestamp(latestVersion.localModifiedAt, fallbackDate)
-        : fallbackDate
-
       // Build a per-device view of latest version timestamps so we can
       // show both modified and uploaded times for each location in the UI.
       const latestByDevice = new Map<
@@ -109,11 +103,19 @@ export async function GET(request: NextRequest) {
         }
       >()
 
+      // Use the max sanitized modified time across ALL versions as the save's lastModifiedAt.
+      // This avoids showing a stale or fallback date (e.g. upload time) when one version had a bad timestamp.
+      let lastModifiedAt: Date = save.updatedAt
+
       for (const version of save.versions) {
-        const existing = latestByDevice.get(version.deviceId)
         const versionUploadedAt = version.uploadedAt || save.updatedAt
         const sanitizedModifiedAt = sanitizeTimestamp(version.localModifiedAt, versionUploadedAt)
 
+        if (sanitizedModifiedAt.getTime() > lastModifiedAt.getTime()) {
+          lastModifiedAt = sanitizedModifiedAt
+        }
+
+        const existing = latestByDevice.get(version.deviceId)
         if (!existing || sanitizedModifiedAt.getTime() > existing.modifiedAt.getTime()) {
           latestByDevice.set(version.deviceId, {
             modifiedAt: sanitizedModifiedAt,
@@ -122,12 +124,20 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      const sanitizedLocalModifiedAt =
+        latestVersion
+          ? sanitizeTimestamp(
+            latestVersion.localModifiedAt,
+            latestVersion.uploadedAt || save.updatedAt
+          )
+          : save.updatedAt
+
       return {
         id: save.id,
         saveKey: save.saveKey,
         displayName: save.displayName,
         fileSize: latestVersion?.byteSize || 0,
-        lastModifiedAt: sanitizedLocalModifiedAt,
+        lastModifiedAt,
         uploadedAt: latestVersion?.uploadedAt || save.updatedAt,
         syncStrategy: save.syncStrategy,
         locations: save.locations.map((loc) => {

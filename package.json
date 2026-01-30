@@ -17,6 +17,7 @@
     "client:deploy:portmaster:prod": "cd client && RETROSYNC_SERVER_URL=https://retrosync.vercel.app ./build/portmaster/deploy.sh",
     "client:deploy:portmaster:muos": "cd client && ./build/portmaster/deploy-muos.sh",
     "client:build:macos": "cd client && ./build/macos/build.sh",
+    "client:test:macos": "cd client && love .",
     "client:build": "npm run client:build:portmaster",
     "client:deploy": "npm run client:deploy:portmaster",
     "client:deploy:muos": "npm run client:deploy:portmaster:muos",

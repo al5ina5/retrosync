@@ -14,6 +14,8 @@ export type SaveItemDesktopProps = {
   syncEnabled: boolean;
   isUpdating: boolean;
   onSyncChange: (checked: boolean) => void;
+  onDownload?: (saveKey: string, fileName: string) => void;
+  isDownloading?: boolean;
   locationsByDevice: LocationsByDevice;
 };
 
@@ -26,6 +28,8 @@ export function SaveItemDesktop({
   syncEnabled,
   isUpdating,
   onSyncChange,
+  onDownload,
+  isDownloading,
   locationsByDevice,
 }: SaveItemDesktopProps) {
   return (
@@ -38,7 +42,13 @@ export function SaveItemDesktop({
           className="p-2 px-4 border-r-2 border-gameboy-lightest"
           onClick={(e) => e.stopPropagation()}
         >
-          <button aria-label="Download">
+          <button
+            type="button"
+            aria-label={isDownloading ? "Downloading…" : "Download"}
+            disabled={isDownloading}
+            onClick={() => onDownload?.(save.saveKey, save.displayName)}
+            className="disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download size={20} />
           </button>
         </div>
@@ -57,7 +67,7 @@ export function SaveItemDesktop({
       </div>
       <div className="text-xs border-t-2 border-gameboy-lightest flex">
         <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
-          {formatRelativeTime(save.lastModifiedAt)}
+          {formatRelativeTime(save.uploadedAt ?? save.lastModifiedAt)}
         </p>
         <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
           ({formatFileSize(save.fileSize)})

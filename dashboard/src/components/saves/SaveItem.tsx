@@ -14,7 +14,7 @@ type SaveItemProps = {
 };
 
 export function SaveItem({ save, expanded, onToggleExpand }: SaveItemProps) {
-  const { formatFileSize, formatRelativeTime, setSyncStrategy, isUpdatingStrategy } = useSaves();
+  const { formatFileSize, formatRelativeTime, setSyncStrategy, isUpdatingStrategy, downloadSave, isDownloading } = useSaves();
 
   const syncEnabled = save.syncStrategy === "shared";
   const isUpdating = isUpdatingStrategy === save.id;
@@ -36,6 +36,8 @@ export function SaveItem({ save, expanded, onToggleExpand }: SaveItemProps) {
     return Array.from(map.entries());
   }, [save.locations]);
 
+  const handleDownload = () => downloadSave(save.saveKey, save.displayName);
+
   const shared = {
     save,
     expanded,
@@ -44,6 +46,8 @@ export function SaveItem({ save, expanded, onToggleExpand }: SaveItemProps) {
     syncEnabled,
     isUpdating,
     onSyncChange: handleSyncChange,
+    onDownload: handleDownload,
+    isDownloading: isDownloading === save.saveKey,
     locationsByDevice,
   };
 

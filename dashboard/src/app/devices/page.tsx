@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { DevicePairForm, DeviceList } from "@/components/devices";
 import Layout from "@/components/ui/Layout";
+import Downloads from "@/components/devices/Downloads";
 
 export default function DevicesPage() {
   const router = useRouter();
@@ -22,6 +23,7 @@ export default function DevicesPage() {
     <Layout>
       <DevicePairForm />
       <DeviceList />
+      <Downloads />
     </Layout>
   );
 }

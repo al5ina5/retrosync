@@ -67,12 +67,29 @@ export async function deleteFile(key: string): Promise<void> {
   await s3Client.deleteObject({ Bucket: BUCKET_NAME, Key: key }).promise();
 }
 
-export function getPresignedUrl(key: string, expiresIn: number = 3600): string {
-  return s3Client.getSignedUrl("getObject", {
+/**
+ * Returns a presigned GET URL. If filename is provided, S3 will return
+ * Content-Disposition: attachment; filename="..." so the browser saves with that name.
+ */
+export function getPresignedUrl(
+  key: string,
+  expiresIn: number = 3600,
+  filename?: string
+): string {
+  const params: Record<string, unknown> = {
     Bucket: BUCKET_NAME,
     Key: key,
     Expires: expiresIn,
-  });
+  };
+  if (filename) {
+    // Basename only (no path), then strip only chars that break Content-Disposition or filesystems
+    const basename = filename.split(/[/\\]/).pop()?.trim() || "download";
+    const safe = basename
+      .replace(/[\\"\x00-\x1f]/g, "_")
+      .trim() || "download";
+    params.ResponseContentDisposition = `attachment; filename="${safe}"`;
+  }
+  return s3Client.getSignedUrl("getObject", params);
 }
 
 export function getPresignedUploadUrl(key: string, expiresIn: number = 3600): string {

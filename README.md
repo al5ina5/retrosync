@@ -174,6 +174,22 @@ To remove autostart integration:
 
 The uninstaller is located at the same level as `RetroSync.sh` in your PortMaster directory.
 
+### Testing on macOS
+
+Ensure `client/watcher.sh` is executable (`chmod +x client/watcher.sh`). Git preserves the execute bit once set.
+
+When you run the Lua client on macOS (`yarn client:test:macos` or `love .` from the `client/` folder):
+
+- **Watcher lifecycle:** The app starts the watcher when it opens and stops it when you quit. You’ll see `watcher: started` and `watcher: exiting` in the watcher log.
+- **Log locations** (relative to the app directory, e.g. `client/` when running `love .`):
+  - **`data/debug.log`** — Main app log (startup, pairing, uploads, errors). On startup the app also appends contents from `data/watcher.log` here.
+  - **`data/watcher.log`** — Watcher daemon log (file discovery, upload attempts, success/failure).
+- **Verify uploads via API:** If the client reports uploads but you don’t see them in the dashboard, run:
+  ```bash
+  ./scripts/check-uploads-api.sh
+  ```
+  This calls `GET /api/saves` with your device’s API key (from `client/data/api_key`). If it shows saves but the dashboard doesn’t, make sure you’re logged into the dashboard with the **same user account** that paired this device. Use `BASE_URL=http://localhost:3000 ./scripts/check-uploads-api.sh` when testing against a local dashboard.
+
 ## License
 
 MIT

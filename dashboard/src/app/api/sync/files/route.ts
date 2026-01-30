@@ -6,6 +6,25 @@ import { listFiles, uploadFile } from '@/lib/s3'
 import crypto from 'crypto'
 
 /**
+ * Strip battery-save extension so saveKey is extension-agnostic.
+ * .sav and .srm are the same logical save; extension is only stored per device in SaveLocation.localPath.
+ */
+function stripBatteryExtension(key: string): string {
+  if (key.endsWith('.srm')) return key.slice(0, -4)
+  if (key.endsWith('.sav')) return key.slice(0, -4)
+  return key
+}
+
+/**
+ * Get filename (last path segment) from path. Handles both / and \ so we always match by game name.
+ */
+function getBasename(path: string): string {
+  const normalized = path.replace(/\\/g, '/').trim()
+  const segment = normalized.split('/').pop()
+  return segment ?? normalized
+}
+
+/**
  * GET /api/sync/files - List available save files
  */
 export async function GET(request: NextRequest) {
@@ -153,10 +172,16 @@ export async function POST(request: NextRequest) {
             ? ((body as any).saveKey as string)
             : null
 
-        const normalizedSaveKey = (providedSaveKey || safeFilePath)
+        // Always use filename (basename) for saveKey so we match by game, not by full path.
+        // Handles full path in filePath or saveKey (e.g. Windows, or client bug).
+        const baseName = getBasename(safeFilePath)
+        const keySource = providedSaveKey ?? baseName
+        const rawSaveKey = getBasename(keySource)
           .replace(/\\/g, '/')
           .replace(/\s+/g, ' ')
           .trim()
+        // Extension-agnostic: saveKey has no .sav/.srm; extension lives only in SaveLocation.localPath
+        const normalizedSaveKey = stripBatteryExtension(rawSaveKey)
 
         const hashHex =
           typeof (body as any).contentHash === 'string' && (body as any).contentHash.length > 0
@@ -197,23 +222,54 @@ export async function POST(request: NextRequest) {
           localModifiedAt = now
         }
 
-        // Create/resolve logical Save
-        const save = await prisma.save.upsert({
+        // Create/resolve logical Save: saveKey has no extension; match is extension-agnostic.
+        const canonicalDisplayName = stripBatteryExtension(baseName)
+
+        let save = await prisma.save.findUnique({
           where: {
             userId_saveKey: {
               userId: device.userId,
               saveKey: normalizedSaveKey,
             },
           },
-          create: {
-            userId: device.userId,
-            saveKey: normalizedSaveKey,
-            displayName: safeFilePath.split('/').pop() || safeFilePath,
-          },
-          update: {
-            displayName: safeFilePath.split('/').pop() || safeFilePath,
-          },
         })
+
+        const matchedBySaveKey = !!save
+
+        if (!save) {
+          // No Save for this saveKey; try to match by content hash (same file, different ROM name)
+          const existingVersionByHash = await prisma.saveVersion.findFirst({
+            where: {
+              contentHash: hashHex,
+              save: { userId: device.userId },
+            },
+            include: { save: true },
+            orderBy: { uploadedAt: 'desc' },
+          })
+          if (existingVersionByHash?.save) {
+            save = existingVersionByHash.save
+            console.log(
+              `[Upload] Matched existing save by content hash: saveId=${save.id} saveKey=${save.saveKey} ` +
+              `(incoming key=${normalizedSaveKey})`
+            )
+          }
+        }
+
+        if (!save) {
+          save = await prisma.save.create({
+            data: {
+              userId: device.userId,
+              saveKey: normalizedSaveKey,
+              displayName: canonicalDisplayName,
+            },
+          })
+        } else if (matchedBySaveKey) {
+          // Only update displayName when we matched by saveKey; keep existing name when matched by hash
+          await prisma.save.update({
+            where: { id: save.id },
+            data: { displayName: canonicalDisplayName },
+          })
+        }
 
         // Ensure per-device-per-path mapping exists
         // Now supports multiple paths per device (e.g., different cores for same game)

@@ -14,6 +14,8 @@ export type SaveItemMobileProps = {
   syncEnabled: boolean;
   isUpdating: boolean;
   onSyncChange: (checked: boolean) => void;
+  onDownload?: (saveKey: string, fileName: string) => void;
+  isDownloading?: boolean;
   locationsByDevice: LocationsByDevice;
 };
 
@@ -26,6 +28,8 @@ export function SaveItemMobile({
   syncEnabled,
   isUpdating,
   onSyncChange,
+  onDownload,
+  isDownloading,
   locationsByDevice,
 }: SaveItemMobileProps) {
   return (
@@ -42,7 +46,13 @@ export function SaveItemMobile({
           className=" p-2 px-4 border-r-2 border-gameboy-lightest"
           onClick={(e) => e.stopPropagation()}
         >
-          <button aria-label="Download">
+          <button
+            type="button"
+            aria-label={isDownloading ? "Downloading…" : "Download"}
+            disabled={isDownloading}
+            onClick={() => onDownload?.(save.saveKey, save.displayName)}
+            className="disabled:opacity-50 disabled:cursor-not-allowed"
+          >
             <Download size={20} />
           </button>
         </div>
@@ -63,7 +73,7 @@ export function SaveItemMobile({
 
       <div className="text-xs whitespace-nowrap border-t-2 border-gameboy-lightest flex">
         <p className="p-2 px-4 border-r-2 border-gameboy-lightest">
-          {formatRelativeTime(save.lastModifiedAt)}
+          {formatRelativeTime(save.uploadedAt ?? save.lastModifiedAt)}
         </p>
       </div>
 

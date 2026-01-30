@@ -285,6 +285,16 @@ discover_files() {
     "/mnt/mmc/MUOS/save/file"
   )
 
+  # Custom paths added via drag-and-drop in the client (data/custom_paths.txt)
+  if [[ -f "$DATA_DIR/custom_paths.txt" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+      [[ "$line" == *"/" ]] && line="${line%/}"
+      locations+=( "$line" )
+    done < "$DATA_DIR/custom_paths.txt"
+  fi
+
   for loc in "${locations[@]}"; do
     [[ -d "$loc" ]] || continue
     log "discover_files: scanning root $(printf '%q' "$loc")"
