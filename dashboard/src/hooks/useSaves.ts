@@ -31,10 +31,12 @@ export interface UseSavesReturn {
   strategyError: string | null;
   formatFileSize: (bytes: number) => string;
   formatRelativeTime: (isoString: string) => string;
+  formatShortDateTime: (isoString: string) => string;
 }
 
 export function useSaves(options: UseSavesOptions = {}): UseSavesReturn {
   const context = useSavesContext();
+  const state = useSavesState(options);
   if (context != null) return context;
-  return useSavesState(options);
+  return state;
 }

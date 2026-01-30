@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import useSWR, { mutate } from 'swr'
-import { fetcher } from '@/lib/utils'
+import { fetcher } from '@/lib/fetcher'
 
 type SyncStrategy = 'shared' | 'per_device'
 
@@ -472,7 +472,7 @@ export default function SavesPage() {
                         byDevice.set(loc.deviceId, arr)
                       }
 
-                      const deviceIds = [...byDevice.keys()]
+                      const deviceIds = Array.from(byDevice.keys())
                       deviceIds.sort((a, b) => {
                         const locsA = byDevice.get(a)!
                         const locsB = byDevice.get(b)!

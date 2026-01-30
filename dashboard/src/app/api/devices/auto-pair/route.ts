@@ -97,7 +97,7 @@ export async function POST(request: NextRequest) {
 
     // Pairing code found! Complete the pairing automatically
     const apiKey = generateApiKey()
-    const deviceName = generateDeviceName(pairingCode.deviceType || 'other')
+    const deviceName = generateDeviceName()
 
     // In practice userId should always be set for auto-pairing,
     // but guard defensively to satisfy types and avoid bad data.

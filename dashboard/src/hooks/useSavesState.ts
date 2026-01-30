@@ -34,6 +34,19 @@ function formatRelativeTime(isoString: string): string {
   return diffYears === 1 ? "1 year ago" : `${diffYears} years ago`;
 }
 
+function formatShortDateTime(isoString: string): string {
+  const dt = new Date(isoString);
+  if (Number.isNaN(dt.getTime())) return "";
+  return new Intl.DateTimeFormat("en-US", {
+    month: "numeric",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: true,
+  }).format(dt).replace(",", "");
+}
+
 export function useSavesState(options: UseSavesOptions = {}): UseSavesReturn {
   const { refreshInterval = 0, onDeleteSuccess, onStrategyChange } = options;
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
@@ -172,5 +185,6 @@ export function useSavesState(options: UseSavesOptions = {}): UseSavesReturn {
     strategyError,
     formatFileSize,
     formatRelativeTime,
+    formatShortDateTime,
   };
 }

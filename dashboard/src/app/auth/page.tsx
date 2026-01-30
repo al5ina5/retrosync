@@ -8,6 +8,7 @@ import { useState } from "react";
 export default function AuthPage() {
   const router = useRouter();
   const auth = useAuthContext();
+  const [mode, setMode] = useState<"login" | "register">("login");
 
   if (auth === null) return <div>Loading...</div>;
   const { isAuthenticated, isLoading } = auth;
@@ -17,7 +18,6 @@ export default function AuthPage() {
     router.push("/");
     return null;
   }
-  const [mode, setMode] = useState<"login" | "register">("login");
   const isLoginMode = mode === "login";
 
   return (

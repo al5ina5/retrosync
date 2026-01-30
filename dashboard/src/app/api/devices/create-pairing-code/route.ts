@@ -2,7 +2,6 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest, generatePairingCode } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
-import QRCode from 'qrcode'
 
 export async function POST(request: NextRequest) {
   try {
@@ -45,20 +44,9 @@ export async function POST(request: NextRequest) {
       },
     })
 
-    // Generate QR code. Use the request origin so we don't rely on a
-    // hard-coded NEXT_PUBLIC_API_URL environment variable.
-    const apiUrl = request.nextUrl?.origin || 'http://localhost:3000'
-    const qrCodeData = JSON.stringify({
-      code,
-      apiUrl,
-    })
-
-    const qrCode = await QRCode.toDataURL(qrCodeData)
-
     return successResponse({
       code: pairingCode.code,
       expiresAt: pairingCode.expiresAt,
-      qrCode,
     }, 'Pairing code generated successfully')
   } catch (error) {
     console.error('Create pairing code error:', error)

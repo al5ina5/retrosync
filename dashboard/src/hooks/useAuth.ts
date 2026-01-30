@@ -18,6 +18,7 @@ export interface UseAuthReturn extends AuthState {
 
 export function useAuth(options: UseAuthOptions = {}): UseAuthReturn {
   const context = useAuthContext();
+  const state = useAuthState(options);
   if (context != null) return context;
-  return useAuthState(options);
+  return state;
 }
