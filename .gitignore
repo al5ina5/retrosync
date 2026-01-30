@@ -12,9 +12,9 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment files
-.env
-.env.local
-.env.*.local
+# .env
+# .env.local
+# .env.*.local
 
 # Database
 *.db
@@ -56,7 +56,3 @@ minio_data/
 client/.retrosync/
 config.json
 .vercel
-
-# Device / runtime secrets (do not commit)
-client/data/api_key
-data/api_key

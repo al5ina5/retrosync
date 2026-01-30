@@ -1,0 +1,55 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+# One release per tag; no cancel.
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: "npm"
+
+      - name: Install root deps
+        run: npm install
+
+      - name: Install dashboard deps
+        run: cd dashboard && yarn install --frozen-lockfile
+
+      - name: Prisma generate
+        run: npm run dashboard:db:generate
+
+      - name: Build dashboard
+        run: npm run dashboard:build
+
+      - name: Build client (if scripts exist)
+        run: |
+          if [ -f client/build/portmaster/build.sh ]; then
+            npm run client:build
+          fi
+        continue-on-error: true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          generate_release_notes: true
+          draft: false
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      # Optional: upload dashboard .next as artifact (for self-hosted deploy)
+      # - name: Upload dashboard build
+      #   uses: actions/upload-artifact@v4
+      #   with:
+      #     name: dashboard-next-${{ github.ref_name }}
+      #     path: dashboard/.next

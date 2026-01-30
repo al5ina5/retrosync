@@ -1,3 +1,9 @@
+## Client UX policy (all agents)
+
+**No typing or file browsing on the Lua client.** Text input and path picking are handled on the web dashboard only. See `client/UX.md` for details. Exception: Mac may support keyboard/file dialogs in future.
+
+---
+
 ## Dashboard Redesign Agent
 
 This agent is focused on **redesigning the web dashboard UI/UX** for this project.

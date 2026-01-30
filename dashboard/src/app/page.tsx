@@ -31,8 +31,8 @@ export default function HomePage() {
       <div className="space-y-6">
         <div className="text-center space-y-2">
           <p>Supported Devices</p>
-          <div className="flex gap-2 justify-center">
-            {['Ambernic', 'Miyoo Flip'].map((device =>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {['Computer', 'Ambernic', 'Miyoo Flip'].map((device =>
               <div key={device} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
                 {device}
               </div>
@@ -40,8 +40,8 @@ export default function HomePage() {
           </div>
         </div><div className="text-center space-y-2">
           <p>Supported Operating Systems</p>
-          <div className="flex gap-2 justify-center">
-            {['muOS', 'spruceOS'].map((device =>
+          <div className="flex flex-wrap gap-2 justify-center">
+            {['MacOS', 'Windows', 'Linux', 'muOS', 'spruceOS'].map((device =>
               <div key={device} className="text-xs whitespace-nowrap p-2 px-4 border-2 border-gameboy-darkest">
                 {device}
               </div>
