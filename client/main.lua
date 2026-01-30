@@ -44,6 +44,12 @@ function love.load()
         os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
     end)
     storage.loadAudioPrefs(state)
+    
+    -- Load and apply theme
+    storage.loadTheme(state)
+    local palette = require("src.ui.palette")
+    palette.setTheme(state.themeId or "classic")
+    
     assets.load(state)
     
     log.consolidateLogs()

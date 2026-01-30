@@ -61,6 +61,7 @@ local state = {
     settingsStatusMessage = "",
     musicEnabled = false,
     soundsEnabled = false,
+    themeId = "classic",
 
     -- Device history (data only; no UI screen)
     deviceHistory = {},

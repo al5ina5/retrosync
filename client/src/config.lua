@@ -29,6 +29,7 @@ M.SERVER_URL_FILE = M.DATA_DIR .. "/server_url"
 M.HISTORY_FILE = M.DATA_DIR .. "/device_history.json"
 M.CUSTOM_PATHS_FILE = M.DATA_DIR .. "/custom_paths.txt"
 M.AUDIO_PREFS_FILE = M.DATA_DIR .. "/audio_prefs"
+M.THEME_FILE = M.DATA_DIR .. "/theme"
 M.INSTALL_BG_SCRIPT = M.APP_DIR .. "/install-background-process.sh"
 M.UNINSTALL_BG_SCRIPT = M.APP_DIR .. "/uninstall-background-process.sh"
 

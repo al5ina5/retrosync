@@ -117,6 +117,32 @@ function M.saveAudioPrefs(state)
     end
 end
 
+function M.loadTheme(state)
+    state.themeId = "classic"  -- default
+    local file = io.open(config.THEME_FILE, "r")
+    if not file then return end
+    local line = file:read("*l")
+    file:close()
+    if line then
+        line = line:match("^%s*(.-)%s*$")
+        if line and line ~= "" then
+            state.themeId = line
+        end
+    end
+end
+
+function M.saveTheme(themeId)
+    pcall(function()
+        os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
+    end)
+    local file = io.open(config.THEME_FILE, "w")
+    if file then
+        file:write(themeId)
+        file:write("\n")
+        file:close()
+    end
+end
+
 function M.loadCustomPaths(state)
     state.customTrackablePaths = {}
     local file = io.open(config.CUSTOM_PATHS_FILE, "r")

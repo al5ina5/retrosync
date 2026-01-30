@@ -13,6 +13,10 @@ local M = {}
 local OPTIONS = {
     { id = "music_toggle", getLabel = function(s) return (s and s.musicEnabled) and "Music: On" or "Music: Off" end },
     { id = "sounds_toggle", getLabel = function(s) return (s and s.soundsEnabled) and "Sounds: On" or "Sounds: Off" end },
+    { id = "theme_toggle", getLabel = function(s) 
+        local palette = require("src.ui.palette")
+        return "Theme: " .. palette.getCurrentThemeName()
+    end },
     { id = "background_toggle", getLabel = function() return settings.isBackgroundProcessEnabled() and "Background process: Enabled" or "Background process: Disabled" end },
     { id = "unpair", label = "Unpair" },
     { id = "back", label = "Go Back" },
@@ -54,6 +58,13 @@ function M.runOptionAtIndex(index, state, configModule)
     elseif opt.id == "sounds_toggle" then
         state.soundsEnabled = not state.soundsEnabled
         storage.saveAudioPrefs(state)
+        return nil
+    elseif opt.id == "theme_toggle" then
+        local palette = require("src.ui.palette")
+        local nextThemeId = palette.nextTheme()
+        palette.setTheme(nextThemeId)
+        state.themeId = nextThemeId
+        storage.saveTheme(nextThemeId)
         return nil
     elseif opt.id == "background_toggle" then
         if not settings.runToggleBackgroundProcessAsync(state, configModule) then
