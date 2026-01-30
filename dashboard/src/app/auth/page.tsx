@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useAuthContext } from "@/contexts/AuthContext";
 import { AuthForm } from "@/components/auth";
 import { useState } from "react";
+import Layout from "@/components/ui/Layout";
 
 export default function AuthPage() {
   const router = useRouter();
@@ -21,7 +22,7 @@ export default function AuthPage() {
   const isLoginMode = mode === "login";
 
   return (
-    <div className="max-w-xl mx-auto p-12 pt-24 space-y-24 text-center">
+    <Layout>
       {isLoginMode ? (
         <div className="space-y-6">
           <h1 className="text-4xl">Sign in to your account</h1>
@@ -34,6 +35,6 @@ export default function AuthPage() {
         </div>
       )}
       <AuthForm mode={mode} setMode={setMode} />
-    </div >
+    </Layout>
   );
 }
