@@ -1,6 +1,5 @@
 -- Add syncStrategy to Save: "shared" (one version for all) or "per_device" (each device has its own, all backed up)
-ALTER TABLE "Save" ADD COLUMN "syncStrategy" TEXT NOT NULL DEFAULT 'shared';
+ALTER TABLE "Save" ADD COLUMN IF NOT EXISTS "syncStrategy" TEXT NOT NULL DEFAULT 'shared';
 
--- Remove per-location sync; sync is now per-save only (handles both sync_mode and legacy syncEnabled)
-ALTER TABLE "SaveLocation" DROP COLUMN IF EXISTS "syncMode";
+-- Remove legacy syncEnabled only (syncMode stays - per-location sync setting)
 ALTER TABLE "SaveLocation" DROP COLUMN IF EXISTS "syncEnabled";

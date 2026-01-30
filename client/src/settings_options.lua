@@ -10,14 +10,16 @@ local storage = require("src.storage")
 local M = {}
 
 -- Option list: order defines display order. Only options that need no typing/file browse.
+-- activatableWithArrows: if true, left/right (or dpleft/dpright) toggle/cycle the option in place.
+-- All options respond to space/return/confirm for activation.
 local OPTIONS = {
-    { id = "music_toggle", getLabel = function(s) return (s and s.musicEnabled) and "Music: On" or "Music: Off" end },
-    { id = "sounds_toggle", getLabel = function(s) return (s and s.soundsEnabled) and "Sounds: On" or "Sounds: Off" end },
-    { id = "theme_toggle", getLabel = function(s) 
+    { id = "music_toggle", activatableWithArrows = true, getLabel = function(s) return (s and s.musicEnabled) and "Music: On" or "Music: Off" end },
+    { id = "sounds_toggle", activatableWithArrows = true, getLabel = function(s) return (s and s.soundsEnabled) and "Sounds: On" or "Sounds: Off" end },
+    { id = "theme_toggle", activatableWithArrows = true, getLabel = function(s)
         local palette = require("src.ui.palette")
         return "Theme: " .. palette.getCurrentThemeName()
     end },
-    { id = "background_toggle", getLabel = function() return settings.isBackgroundProcessEnabled() and "Background process: Enabled" or "Background process: Disabled" end },
+    { id = "background_toggle", activatableWithArrows = true, getLabel = function() return settings.isBackgroundProcessEnabled() and "Background process: Enabled" or "Background process: Disabled" end },
     { id = "unpair", label = "Unpair" },
     { id = "back", label = "Go Back" },
 }
@@ -40,7 +42,11 @@ function M.getOptionAtIndex(index, state)
     local o = OPTIONS[index]
     if not o then return nil end
     state = state or {}
-    return { id = o.id, label = o.getLabel and o.getLabel(state) or o.label }
+    return {
+        id = o.id,
+        label = o.getLabel and o.getLabel(state) or o.label,
+        activatableWithArrows = o.activatableWithArrows,
+    }
 end
 
 -- Run the action for the option at the given 1-based index.

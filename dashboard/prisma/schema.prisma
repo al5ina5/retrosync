@@ -127,6 +127,8 @@ model SaveLocation {
   deviceId    String
   deviceType  String
   localPath   String
+  /// sync | upload_only | disabled
+  syncMode    String   @default("sync")
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
   device      Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)

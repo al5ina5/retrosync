@@ -28,6 +28,7 @@ export interface UseDevicesReturn {
 
 export function useDevices(options: UseDevicesOptions = {}): UseDevicesReturn {
   const context = useDevicesContext();
+  const fallbackState = useDevicesState(options);
   if (context != null) return context;
-  return useDevicesState(options);
+  return fallbackState;
 }

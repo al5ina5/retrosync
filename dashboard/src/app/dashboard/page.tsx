@@ -4,7 +4,7 @@ import { useEffect } from 'react'
 import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import useSWR from 'swr'
-import { fetcher } from '@/lib/utils'
+import { fetcher } from '@/lib/fetcher'
 import AnimatedLogo from '@/components/AnimatedLogo'
 
 interface Device {

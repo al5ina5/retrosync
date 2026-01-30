@@ -1,24 +1,24 @@
 -- AlterTable: Update PairingCode model
 -- Make userId nullable, remove deviceIdentifier, add deviceType
+-- Use TEXT for userId to match existing data; FK added separately if needed
 
--- Step 1: Create new table with updated schema
+-- Step 1: Create new table (no FK inline - production DB may have type mismatches)
 CREATE TABLE "PairingCode_new" (
     "id" TEXT NOT NULL PRIMARY KEY,
     "code" TEXT NOT NULL,
     "userId" TEXT,
-    "expiresAt" DATETIME NOT NULL,
+    "expiresAt" TIMESTAMP(3) NOT NULL,
     "used" BOOLEAN NOT NULL DEFAULT false,
-    "usedAt" DATETIME,
+    "usedAt" TIMESTAMP(3),
     "deviceId" TEXT,
     "deviceType" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    CONSTRAINT "PairingCode_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE CASCADE ON UPDATE CASCADE
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- Step 2: Copy data from old table (preserve existing data)
 INSERT INTO "PairingCode_new" ("id", "code", "userId", "expiresAt", "used", "usedAt", "deviceId", "createdAt")
-SELECT "id", "code", 
-       CASE WHEN "userId" = '' THEN NULL ELSE "userId" END,
+SELECT "id", "code",
+       NULLIF(TRIM(COALESCE("userId"::text, '')), ''),
        "expiresAt", "used", "usedAt", "deviceId", "createdAt"
 FROM "PairingCode";
 

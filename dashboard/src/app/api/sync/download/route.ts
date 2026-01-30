@@ -4,6 +4,8 @@ import { extractApiKey } from '@/lib/auth'
 import { errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { downloadFile } from '@/lib/s3'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/sync/download?saveVersionId=...
  * Downloads the bytes for a specific SaveVersion owned by the same user.
@@ -47,7 +49,7 @@ export async function GET(request: NextRequest) {
       })
       .catch((e) => console.warn('Failed to log download:', e))
 
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes), {
       status: 200,
       headers: {
         'content-type': 'application/octet-stream',

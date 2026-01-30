@@ -4,6 +4,8 @@ import { getUserFromRequest, extractApiKey } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { deleteFile } from '@/lib/s3'
 
+export const dynamic = 'force-dynamic'
+
 /**
  * GET /api/saves - List all saves for the authenticated user
  * Supports both JWT token (web dashboard) and API key (client devices)

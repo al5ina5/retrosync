@@ -4,6 +4,8 @@ import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { getPresignedUrl } from '@/lib/s3'
 
+export const dynamic = 'force-dynamic'
+
 export async function GET(request: NextRequest) {
   try {
     const user = getUserFromRequest(request)

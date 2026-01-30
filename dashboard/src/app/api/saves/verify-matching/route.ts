@@ -1,5 +1,7 @@
 import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
+
+export const dynamic = 'force-dynamic'
 import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 

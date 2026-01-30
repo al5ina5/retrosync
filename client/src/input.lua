@@ -15,6 +15,19 @@ local function isBackButton(button)
     return button == "b" or button == "back" or button == "select" or button == "x" or button == "y"
 end
 
+-- Activate the selected settings option. Plays appropriate sound and runs the action.
+-- Used for both keyboard (space/return/left/right) and gamepad (a/dpleft/dpright).
+local function activateSettingsOption(state, config, opt)
+    if not opt then return end
+    if opt.id == "back" then
+        if state.soundsEnabled and state.uiBackSound then state.uiBackSound:stop(); state.uiBackSound:play() end
+    else
+        if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
+    end
+    local msg = settings_options.runOptionAtIndex(state.settingsSelectedIndex, state, config)
+    if msg then state.settingsStatusMessage = msg end
+end
+
 function M.handleKeypressed(state, config, key)
     local currentTime = love.timer.getTime()
     if currentTime - state.lastInputTime < config.inputDebounceThreshold then
@@ -96,21 +109,17 @@ function M.handleKeypressed(state, config, key)
             if state.soundsEnabled and state.uiHoverSound and state.settingsSelectedIndex ~= prev then
                 state.uiHoverSound:stop(); state.uiHoverSound:play()
             end
-        elseif (key == "left" or key == "right") then
+        elseif key == "left" or key == "right" then
             local opt = settings_options.getOptionAtIndex(state.settingsSelectedIndex, state)
-            if opt and (opt.id == "music_toggle" or opt.id == "sounds_toggle" or opt.id == "background_toggle") then
-                if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
-                local msg = settings_options.runOptionAtIndex(state.settingsSelectedIndex, state, config)
-                if msg then state.settingsStatusMessage = msg end
+            if opt and opt.activatableWithArrows then
+                log.logMessage("Settings: " .. opt.label .. " (arrows)")
+                activateSettingsOption(state, config, opt)
             end
         elseif key == "return" or key == "space" or key == "a" or key == "x" then
-            if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
             local opt = settings_options.getOptionAtIndex(state.settingsSelectedIndex, state)
             if opt then
                 log.logMessage("Settings: " .. opt.label .. " selected")
-                if opt.id == "back" and state.soundsEnabled and state.uiBackSound then state.uiBackSound:stop(); state.uiBackSound:play() end
-                local msg = settings_options.runOptionAtIndex(state.settingsSelectedIndex, state, config)
-                if msg then state.settingsStatusMessage = msg end
+                activateSettingsOption(state, config, opt)
             end
         elseif key == "b" or key == "B" or key == "escape" then
             if state.soundsEnabled and state.uiBackSound then state.uiBackSound:stop(); state.uiBackSound:play() end
@@ -233,21 +242,17 @@ function M.handleGamepadpressed(state, config, joystick, button)
             if state.soundsEnabled and state.uiHoverSound and state.settingsSelectedIndex ~= prev then
                 state.uiHoverSound:stop(); state.uiHoverSound:play()
             end
-        elseif (button == "dpleft" or button == "dpright") then
+        elseif button == "dpleft" or button == "dpright" then
             local opt = settings_options.getOptionAtIndex(state.settingsSelectedIndex, state)
-            if opt and (opt.id == "music_toggle" or opt.id == "sounds_toggle" or opt.id == "background_toggle") then
-                if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
-                local msg = settings_options.runOptionAtIndex(state.settingsSelectedIndex, state, config)
-                if msg then state.settingsStatusMessage = msg end
+            if opt and opt.activatableWithArrows then
+                log.logMessage("Settings (gamepad): " .. opt.label .. " (arrows)")
+                activateSettingsOption(state, config, opt)
             end
         elseif button == "a" then
-            if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
             local opt = settings_options.getOptionAtIndex(state.settingsSelectedIndex, state)
             if opt then
                 log.logMessage("Settings (gamepad): " .. opt.label .. " selected")
-                if opt.id == "back" and state.soundsEnabled and state.uiBackSound then state.uiBackSound:stop(); state.uiBackSound:play() end
-                local msg = settings_options.runOptionAtIndex(state.settingsSelectedIndex, state, config)
-                if msg then state.settingsStatusMessage = msg end
+                activateSettingsOption(state, config, opt)
             end
         elseif isBackButton(button) then
             if state.soundsEnabled and state.uiBackSound then state.uiBackSound:stop(); state.uiBackSound:play() end
