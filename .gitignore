@@ -12,9 +12,9 @@ pip-log.txt
 pip-delete-this-directory.txt
 
 # Environment files
-# .env
-# .env.local
-# .env.*.local
+.env
+.env.local
+.env.*.local
 
 # Database
 *.db
