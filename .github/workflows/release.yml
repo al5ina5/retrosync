@@ -27,21 +27,19 @@ jobs:
 
       - name: Zip PortMaster package
         run: |
-          V="${{ github.ref_name }}"
           cd client/dist/portmaster
-          zip -r "retrosync-portmaster-${V}.zip" .
-          mv "retrosync-portmaster-${V}.zip" ../..
+          zip -r "retrosync-portmaster.zip" .
+          mv "retrosync-portmaster.zip" ../..
           cd ../..
-          # Desktop .love for Linux/Windows (same game, run with system LÖVE)
-          cp dist/portmaster/RetroSync/RetroSync.love "retrosync-${V}.love" 2>/dev/null || true
+          cp dist/portmaster/RetroSync/RetroSync.love retrosync.love
 
       - name: Upload PortMaster artifacts
         uses: actions/upload-artifact@v4
         with:
           name: portmaster-${{ github.ref_name }}
           path: |
-            client/retrosync-portmaster-${{ github.ref_name }}.zip
-            client/retrosync-${{ github.ref_name }}.love
+            client/retrosync-portmaster.zip
+            client/retrosync.love
 
   # --- Build macOS .app on macOS runner ---
   build-macos:
@@ -56,19 +54,18 @@ jobs:
           test -d client/dist/macos || { echo "Missing client/dist/macos"; exit 1; }
           test -f client/dist/macos/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
 
-      - name: Zip macOS dist
+      - name: Zip macOS app only
         run: |
-          V="${{ github.ref_name }}"
           cd client/dist/macos
-          zip -r "retrosync-macos-${V}.zip" .
-          mv "retrosync-macos-${V}.zip" ../..
+          zip -r "retrosync-macos.zip" RetroSync.app
+          mv "retrosync-macos.zip" ../..
           cd ../..
 
       - name: Upload macOS artifact
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ github.ref_name }}
-          path: client/retrosync-macos-${{ github.ref_name }}.zip
+          path: client/retrosync-macos.zip
 
   # --- Create GitHub Release with client assets only ---
   release:
@@ -96,24 +93,12 @@ jobs:
           path: artifacts/macos
         continue-on-error: true
 
-      # Gather whatever was downloaded so we only attach existing files
       - name: Prepare release assets
         run: |
           mkdir -p release-assets
-          V="${{ github.ref_name }}"
-          for f in "artifacts/portmaster/retrosync-portmaster-${V}.zip" "artifacts/portmaster/retrosync-${V}.love" "artifacts/macos/retrosync-macos-${V}.zip"; do
+          for f in "artifacts/portmaster/retrosync-portmaster.zip" "artifacts/portmaster/retrosync.love" "artifacts/macos/retrosync-macos.zip"; do
             [ -f "$f" ] && cp "$f" release-assets/
           done
-          # Also publish stable filenames for latest-download URLs.
-          if [ -f "artifacts/portmaster/retrosync-portmaster-${V}.zip" ]; then
-            cp "artifacts/portmaster/retrosync-portmaster-${V}.zip" "release-assets/retrosync-portmaster-latest.zip"
-          fi
-          if [ -f "artifacts/portmaster/retrosync-${V}.love" ]; then
-            cp "artifacts/portmaster/retrosync-${V}.love" "release-assets/retrosync-desktop-latest.love"
-          fi
-          if [ -f "artifacts/macos/retrosync-macos-${V}.zip" ]; then
-            cp "artifacts/macos/retrosync-macos-${V}.zip" "release-assets/retrosync-macos-latest.zip"
-          fi
           ls -la release-assets/
           if [ -z "$(ls -A release-assets)" ]; then
             echo "No release assets found. Failing release step."
