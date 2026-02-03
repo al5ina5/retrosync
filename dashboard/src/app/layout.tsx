@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import { AppDataProvider } from "@/contexts";
 import { AppNav } from "@/components/AppNav";
+import AppWrapper from "@/components/ui/AppWrapper";
 
 export const metadata: Metadata = {
   title: "RetroSync",
@@ -17,10 +18,13 @@ export default function RootLayout({
     <html lang="en">
       <body>
         <AppDataProvider>
-          <AppNav />
-          {children}
+          <AppWrapper>
+            {/* <AppWrapper disabled={true}> */}
+            <AppNav />
+            {children}
+          </AppWrapper>
         </AppDataProvider>
       </body>
-    </html>
+    </html >
   );
 }

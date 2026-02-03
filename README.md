@@ -1,195 +1,195 @@
 # RetroSync
 
-Cloud sync service for retro gaming save files across Miyoo devices.
+RetroSync is a cloud sync service for retro game battery saves that includes a web dashboard and a LÖVE (Lua) client for handhelds and desktop. This README is derived from the codebase behavior and structure, not from other docs.
 
-## Project Structure
+**What It Does**
 
-```
-retrosync/
-├── dashboard/          # Next.js web dashboard and API
-│   ├── src/            # Source code
-│   ├── prisma/         # Database schema
-│   └── package.json
-├── client/             # LOVE2D client app
-│   ├── main.lua        # Main game file
-│   ├── conf.lua        # LOVE2D config
-│   ├── build/          # Build scripts
-│   │   └── portmaster/
-│   │       ├── build.sh
-│   │       └── deploy.sh
-│   └── dist/           # Build output
-└── package.json        # Root package.json with commands
-```
+RetroSync keeps `.sav` and `.srm` battery saves in sync across devices. Devices upload saves to the server, the server stores and versions them, and devices download newer saves back to their local paths. The web dashboard is where users create accounts, pair devices, manage saves, and upgrade plans.
 
-## Quick Start
+**High-Level Architecture**
 
-### Dashboard (Server)
+1. Web dashboard + API server in `dashboard/` using Next.js App Router.
+2. Database via Prisma (PostgreSQL) stores users, devices, saves, versions, locations, and sync logs.
+3. Object storage via S3-compatible API (AWS S3 or MinIO) stores save bytes.
+4. LÖVE client in `client/` handles pairing, manual sync, and UI on retro handhelds or desktop.
+5. Background watcher in `client/watcher.sh` polls the filesystem and uploads changes in the background on supported platforms.
+6. Stripe integration provides a paid subscription tier ($6/mo) and a billing portal.
 
-```bash
-# Install dependencies
-npm run dashboard:install
+**End-User UX (Web Dashboard)**
 
-# Setup database
-npm run dashboard:db:generate
-npm run dashboard:db:push
+Primary pages live at `/` and are styled with a Game Boy inspired theme. There is also a secondary, older `/dashboard/*` UI with a different visual style that is still wired to the same API.
 
-# Start development server
-npm run dashboard:dev
-```
+1. Home (`/`)
+The landing page explains the product and points to device pairing.
 
-Dashboard will be available at http://localhost:3000
+2. Auth (`/auth`)
+Users can register or log in. Registration enforces a strong password (min 10 chars, upper/lower/digit). Login uses JWT stored in localStorage.
 
-### Client (MIYO Device)
+3. Devices (`/devices`)
+Users enter the 6-character code shown on the device to pair. Paired devices are listed. The UI includes a download section for client builds (currently UI-only, links are placeholders).
 
-```bash
-# Build PortMaster package
-npm run client:build
+4. Saves (`/saves`)
+Shows each save, last upload time, device/location counts, and locations grouped by device. Users can download the latest version, or toggle sync strategy between `shared` and `per_device`.
 
-# Deploy to device
-npm run client:deploy
+5. Account (`/account`)
+Users can update display name, email, and password, open the Stripe portal (paid users), and delete their account (with password confirmation).
 
-# Or build and deploy in one command
-npm run deploy
-```
+6. Upgrade (`/upgrade`, `/upgrade/complete`)
+Paid plan checkout is done via Stripe Checkout. After completion, the app verifies the session and upgrades the user to `paid`.
 
-## Available Commands
+7. Download (`/download`)
+A public-facing download page for clients. The buttons are currently non-functional placeholders in code.
 
-### Dashboard Commands
-- `npm run dashboard:dev` - Start development server
-- `npm run dashboard:build` - Build for production
-- `npm run dashboard:start` - Start production server
-- `npm run dashboard:install` - Install dependencies
-- `npm run dashboard:db:generate` - Generate Prisma client
-- `npm run dashboard:db:push` - Push database schema
-- `npm run dashboard:db:migrate` - Run database migrations
+8. Client Spec (`/client`)
+A pixel-perfect visual spec for the LÖVE client UI. It is intentionally used as the design reference for `client/src/ui/*.lua`.
 
-### Client Commands
-- `npm run client:build` - Build PortMaster package
-- `npm run client:deploy` - Deploy to MIYO device
-- `npm run client:build:deploy` - Build and deploy
+**End-User UX (Device Client)**
 
-### Root Commands
-- `npm run dev` - Start dashboard dev server
-- `npm run build` - Build both dashboard and client
-- `npm run deploy` - Build and deploy client
+The LÖVE app is a Game Boy–styled UI with d-pad or keyboard navigation. There is no text entry on the device UI; pairing and configuration are done via the dashboard or file-based config.
 
-## Usage
+1. Pairing screen
+The device requests a 6-character code from `/api/devices/code` and displays it. It then polls `/api/devices/status` until the user links the code on the dashboard, at which point it receives an API key and device name.
 
-1. Start the dashboard: `npm run dashboard:dev`
-2. Open http://localhost:3000 in your browser
-3. Register/login and create a pairing code
-4. Build and deploy client: `npm run deploy`
-5. Launch RetroSync from Ports menu on your MIYO device
-6. Enter the pairing code from the web dashboard
-7. Upload save files!
+2. Home screen
+Menu options are `Sync`, `Recent`, and `Settings` with animated title. The device name is shown at the bottom.
 
-### Client configuration (optional)
+3. Sync screen
+Shows uploaded and downloaded counts, plus rotating status lines. Upload and download happen in phases so the UI stays responsive.
 
-- **`data/server_url`** — If present, the client uses this as the API base URL (one line, no trailing slash). Otherwise it uses the built‑in default. Create this file in the app's `data` folder on the device when pointing at a custom server (e.g. production).
+4. Recent screen
+Lists recent saves pulled from the API, with a simple list UI.
 
-### Autostart behavior
+5. Settings screen
+Toggles for music, sounds, theme, background process, and unpair. The background process toggle runs install/uninstall scripts and shows a loading overlay during execution.
 
-RetroSync automatically installs background watcher autostart integration when you first launch the app. The watcher monitors save files and uploads changes to the cloud automatically.
+6. Unpair confirmation
+A centered confirmation screen. Selecting Yes clears local API key/code and returns to pairing.
 
-#### spruceOS
+7. Desktop drag-and-drop overlay
+On macOS/Windows/Linux, dropping a folder or file onto the window adds a custom sync path and shows an overlay.
 
-When you first launch RetroSync, it automatically integrates with spruce's `networkservices.sh` to start the background watcher on boot. A backup of the original script is created (`.retrosync.bak`) and can be fully restored via `RetroSyncUninstaller.sh` on the device.
+**Data Model (Prisma)**
 
-#### muOS
+Key tables and relationships:
 
-RetroSync automatically creates a `retrosync-init.sh` script in `MUOS/init/` (on the SD card containing the `MUOS` folder) so the watcher starts on boot.
+- `User`: account with email, password hash, subscription tier, Stripe customer ID.
+- `Device`: paired device with API key, type, and last sync time.
+- `PairingCode`: 6-character device pairing code, can be linked to a user or device and expires after 15 minutes.
+- `Save`: logical save per user. Uses `saveKey` (basename, extension-stripped) and a display name.
+- `SaveLocation`: per-device local path mapping for a save. Stores the exact local path (including extension).
+- `SaveVersion`: a versioned upload for a save, with content hash, size, local modified time, and S3 storage key.
+- `SyncLog`: audit trail of upload/download actions.
 
-**Important Setup Steps:**
-1. Launch RetroSync once to install the init script
-2. **Enable "User Init Scripts" in muOS settings** (this is required!)
-   - Go to muOS Settings → System → User Init Scripts → Enable
-3. Reboot your device
-4. The watcher should start automatically on boot
+**Save Identity and Matching**
 
-**Verifying the Watcher is Running:**
+Save identity is normalized to avoid `.sav` vs `.srm` mismatches and path differences.
 
-After reboot, check for these files to confirm the watcher started:
+1. The server strips `.sav` and `.srm` from filenames to produce a canonical `saveKey`.
+2. The server uses the basename (not full path) to build `saveKey` so matching works across different emulator folders.
+3. If no match is found by `saveKey`, the server tries to match by `contentHash` to handle ROM renames.
+4. The server de-duplicates uploads by `contentHash` and does not store duplicate versions.
 
-- **Heartbeat file**: `/MUOS/init/retrosync-heartbeat.txt`
-  - Should contain: `RetroSync init STARTED at [timestamp]`
-  - If present, the init script ran successfully
-  
-- **Init log**: `/MUOS/init/retrosync-init.log`
-  - Contains detailed execution logs
-  - Look for: `Watcher is running (verified)`
-  
-- **Watcher log**: `Roms/PORTS/RetroSync/data/watcher.log` (or `ports/RetroSync/data/watcher.log`)
-  - Contains watcher runtime logs
-  - Should show periodic file checks and uploads
+**Sync Strategy**
 
-- **Process check**: The watcher process should be running
-  - Check with: `ps aux | grep watcher.sh` (if you have SSH access)
+RetroSync supports two strategies per save.
 
-**Troubleshooting muOS Autostart:**
+1. `shared` (default)
+One canonical version is shared across all devices. This is the only strategy included in the download manifest.
 
-If the watcher doesn't start on boot:
+2. `per_device`
+Each device keeps its own version history and does not sync across devices. These saves are excluded from the download manifest.
 
-1. **Check "User Init Scripts" is enabled**
-   - muOS Settings → System → User Init Scripts must be ON
-   - This is the most common issue!
+**Upload Flow (Device to Server)**
 
-2. **Verify init script exists**
-   - Check: `/MUOS/init/retrosync-init.sh` exists
-   - Should be executable (check permissions)
+1. Client discovers `.sav` and `.srm` files in known locations plus any custom paths.
+2. Client compares local mtime/size to the server manifest to skip uploads that are already synced.
+3. Client uploads as base64 JSON to `/api/sync/files` with `localPath` and `localModifiedAt`.
+4. Server normalizes paths, strips `.sav/.srm` from keys, and creates `Save`, `SaveLocation`, and `SaveVersion` records.
+5. Server rejects uploads that are older than the current device version or unchanged within tolerance.
+6. Bytes are stored in S3 under `{userId}/saves/{saveId}/versions/{saveVersionId}`.
 
-3. **Check init log for errors**
-   - Look at `/MUOS/init/retrosync-init.log`
-   - Common errors:
-     - `ERROR: RetroSync directory not found` → Path detection failed
-     - `ERROR: watcher.sh file not found` → RetroSync not installed correctly
-     - `ERROR: watcher.sh exists but is NOT executable` → Permissions issue
+**Download Flow (Server to Device)**
 
-4. **Manually test the init script**
-   - Run: `sh /MUOS/init/retrosync-init.sh`
-   - Check the logs to see what happens
+1. Client fetches `/api/sync/manifest`.
+2. Manifest includes mapped saves for the device and also unmapped shared saves for awareness.
+3. Client compares cloud version time/size to local file and builds a download queue.
+4. Client downloads each file from `/api/sync/download?saveVersionId=...` using its API key.
+5. Downloads are written via a temp file, existing files are backed up to `.bak`, and mtime is set to the cloud value.
 
-5. **Reinstall autostart**
-   - Delete: `Roms/PORTS/RetroSync/data/muos_autostart_installed` (or `ports/RetroSync/data/muos_autostart_installed`)
-   - Launch RetroSync once to reinstall
-   - Reboot
+**Background Watcher (Polling Sync)**
 
-6. **Check RetroSync installation path**
-   - The init script searches common paths: `/mnt/mmc/Roms/PORTS/RetroSync`, `/mnt/sdcard/ports/RetroSync`, etc.
-   - If RetroSync is in a non-standard location, the init script may not find it
+`client/watcher.sh` runs as a separate polling daemon for platforms that support it. It scans known save directories and custom paths, compares mtime and size against a local state file, and uploads changed files. It uses backoff when idle, debounces writes, and keeps state if uploads fail so changes are retried.
 
-#### Other Firmwares
+Supported autostart behaviors:
 
-RetroSync starts its background watcher for the current session when you launch the app, but does not modify OS boot scripts. The watcher will stop when you exit RetroSync or reboot the device.
+1. macOS uses LaunchAgent install/uninstall scripts and stores an install marker.
+2. muOS and Spruce use their respective autostart scripts and markers.
+3. The LÖVE settings menu toggles these scripts on or off.
 
-### Uninstalling Autostart
+**Web API Overview**
 
-To remove autostart integration:
+Authentication:
 
-1. Run `RetroSyncUninstaller.sh` from the PortMaster menu (or manually execute it)
-2. This will:
-   - Stop the watcher process
-   - Remove init scripts from `MUOS/init/` (muOS) or restore `networkservices.sh` (spruceOS)
-   - Clean up heartbeat and log files
-   - Remove install markers
+- Web dashboard uses JWT in the `Authorization: Bearer` header.
+- Devices use an API key in the `X-API-Key` header.
 
-The uninstaller is located at the same level as `RetroSync.sh` in your PortMaster directory.
+Key endpoints:
 
-### Testing on macOS
+- `/api/auth/register`, `/api/auth/login`
+- `/api/devices/code`, `/api/devices/status`, `/api/devices/pair`, `/api/devices/auto-pair`
+- `/api/sync/files`, `/api/sync/manifest`, `/api/sync/download`, `/api/sync/heartbeat`, `/api/sync/log`
+- `/api/saves`, `/api/saves/download`, `/api/saves/set-sync-strategy`, `/api/saves/set-sync-mode`
+- `/api/account` (GET/PATCH/DELETE)
+- `/api/upgrade/checkout`, `/api/upgrade/verify`, `/api/upgrade/portal`, `/api/upgrade/webhook`
 
-Ensure `client/watcher.sh` is executable (`chmod +x client/watcher.sh`). Git preserves the execute bit once set.
+**Local Development**
 
-When you run the Lua client on macOS (`yarn client:test:macos` or `love .` from the `client/` folder):
+From the repo root:
 
-- **Watcher lifecycle:** The app starts the watcher when it opens and stops it when you quit. You’ll see `watcher: started` and `watcher: exiting` in the watcher log.
-- **Log locations** (relative to the app directory, e.g. `client/` when running `love .`):
-  - **`data/debug.log`** — Main app log (startup, pairing, uploads, errors). On startup the app also appends contents from `data/watcher.log` here.
-  - **`data/watcher.log`** — Watcher daemon log (file discovery, upload attempts, success/failure).
-- **Verify uploads via API:** If the client reports uploads but you don’t see them in the dashboard, run:
-  ```bash
-  ./scripts/check-uploads-api.sh
-  ```
-  This calls `GET /api/saves` with your device’s API key (from `client/data/api_key`). If it shows saves but the dashboard doesn’t, make sure you’re logged into the dashboard with the **same user account** that paired this device. Use `BASE_URL=http://localhost:3000 ./scripts/check-uploads-api.sh` when testing against a local dashboard.
+1. `npm run dashboard:install`
+2. `npm run dashboard:db:generate`
+3. `npm run dashboard:db:push`
+4. `npm run dashboard:dev`
 
-## License
+Client build and deploy:
+
+1. `npm run client:build`
+2. `npm run client:deploy`
+
+**Environment Variables (Server)**
+
+The dashboard server expects the following environment variables based on code usage.
+
+- `DATABASE_URL` for Prisma.
+- `JWT_SECRET` for JWT signing (required in production).
+- `S3_ENDPOINT` or `MINIO_ENDPOINT`
+- `S3_ACCESS_KEY_ID` or `MINIO_ROOT_USER`
+- `S3_SECRET_ACCESS_KEY` or `MINIO_ROOT_PASSWORD`
+- `S3_BUCKET` or `MINIO_BUCKET`
+- `AWS_REGION`
+- `STRIPE_SECRET_KEY`
+- `STRIPE_WEBHOOK_SECRET`
+- `NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY` or `STRIPE_PUBLISHABLE_KEY`
+
+**Repository Map**
+
+- `dashboard/` Next.js app and API
+- `dashboard/src/app/api/` API routes
+- `dashboard/prisma/schema.prisma` data model
+- `client/` LÖVE app and watcher scripts
+- `client/src/` Lua modules for UI, sync, and storage
+- `client/watcher.sh` background polling daemon
+- `scripts/` helper scripts for testing and deployment
+
+**Notes on UI Ownership**
+
+The dashboard has two sets of pages:
+
+- `/` + `/devices` + `/saves` + `/account` use the Game Boy visual theme.
+- `/dashboard/*` pages use a separate, Vercel-like theme and are still wired to the same API.
+
+If you are redesigning or consolidating the UI, both routes are part of the current app surface.
+
+**License**
 
 MIT

@@ -16,6 +16,11 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      screens: {
+        "3xl": "1820px",
+        "4xl": "2460px",
+        "5xl": "3740px",
+      },
       colors: {
         gameboy,
       },

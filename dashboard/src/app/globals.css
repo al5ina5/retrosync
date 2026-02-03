@@ -38,6 +38,11 @@
 html,
 body {
     @apply font-gameboy bg-gameboy-lightest text-gameboy-darkest;
+    overscroll-behavior: none;
+}
+
+.pixelated {
+    image-rendering: pixelated;
 }
 
 /* Green text glow (uses Game Boy palette) */
