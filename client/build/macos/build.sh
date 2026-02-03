@@ -4,7 +4,9 @@
 #
 # Usage: run from repo root or client/:
 #   npm run client:build:macos
-#   # or: ./client/build/macos/build.sh
+#   npm run client:build:macos -- --prod
+#   # or: ./client/build/macos/build.sh --prod
+#   # or: ./client/build/macos/build.sh --server-url https://retrosync.vercel.app
 #
 # Output: client/dist/macos/RetroSync.app and RetroSync.love
 #
@@ -12,6 +14,70 @@
 #   LOVE_APP=/Applications/love.app ./client/build/macos/build.sh
 
 set -e
+
+# --- Args / config ---
+DEFAULT_SERVER_URL_PROD="https://retrosync.vercel.app"
+DEFAULT_SERVER_URL_DEV="http://localhost:3000"
+SERVER_URL="${RETROSYNC_SERVER_URL:-}"
+
+usage() {
+  cat <<EOF
+Usage: $0 [--prod|--dev|--server-url <url>]
+
+Options:
+  --prod               Use production server URL (${DEFAULT_SERVER_URL_PROD})
+  --dev                Use local dev server URL (${DEFAULT_SERVER_URL_DEV})
+  --server-url <url>   Use a custom server URL (overrides env)
+  -h, --help           Show this help
+
+You can also set RETROSYNC_SERVER_URL in the environment.
+EOF
+}
+
+normalize_url() {
+  local url="$1"
+  # Trim trailing slash to keep API paths clean.
+  if [[ "${url: -1}" == "/" ]]; then
+    url="${url%/}"
+  fi
+  printf '%s' "$url"
+}
+
+while [[ $# -gt 0 ]]; do
+  case "$1" in
+    --prod)
+      SERVER_URL="$DEFAULT_SERVER_URL_PROD"
+      shift
+      ;;
+    --dev)
+      SERVER_URL="$DEFAULT_SERVER_URL_DEV"
+      shift
+      ;;
+    --server-url)
+      shift
+      if [[ -z "${1:-}" ]]; then
+        echo "ERROR: --server-url requires a value" >&2
+        usage
+        exit 1
+      fi
+      SERVER_URL="$1"
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    *)
+      echo "ERROR: Unknown argument: $1" >&2
+      usage
+      exit 1
+      ;;
+  esac
+done
+
+if [[ -n "$SERVER_URL" ]]; then
+  SERVER_URL="$(normalize_url "$SERVER_URL")"
+fi
 
 # Must run on macOS (PlistBuddy, .app bundle)
 if [[ "$(uname -s)" != "Darwin" ]]; then
@@ -40,7 +106,7 @@ mkdir -p "$CACHE_DIR"
 # --- 1. Create .love archive (game files at root of zip) ---
 LOVE_FILE="$OUT_DIR/${APP_NAME}.love"
 echo "Building ${APP_NAME}.love ..."
-(cd "$CLIENT_ROOT" && zip -r -q "$LOVE_FILE" main.lua conf.lua assets lib)
+(cd "$CLIENT_ROOT" && zip -r -q "$LOVE_FILE" main.lua conf.lua assets lib src autostart watcher.sh)
 echo "  -> $LOVE_FILE"
 
 # --- 2. Resolve LÖVE app (use LOVE_APP env, or /Applications/love.app, or download) ---
@@ -73,6 +139,16 @@ rm -rf "$APP_PATH"
 cp -R "$LOVE_APP_PATH" "$APP_PATH"
 cp "$LOVE_FILE" "$APP_PATH/Contents/Resources/"
 echo "Created $APP_PATH (fused with ${APP_NAME}.love)"
+
+# Optionally bake server URL into app resources (read by client via DATA_DIR/server_url)
+if [[ -n "$SERVER_URL" ]]; then
+  DATA_DIR="$APP_PATH/Contents/Resources/data"
+  mkdir -p "$DATA_DIR"
+  echo "$SERVER_URL" > "$DATA_DIR/server_url"
+  echo "Wrote server URL to $DATA_DIR/server_url"
+else
+  echo "No server URL override provided; client will use default from src/config.lua"
+fi
 
 # --- 4. Update Info.plist (bundle id, name, remove .love association) ---
 PLIST="$APP_PATH/Contents/Info.plist"
