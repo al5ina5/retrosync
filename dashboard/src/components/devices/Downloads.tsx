@@ -3,9 +3,9 @@ import { Button } from "../ui";
 export default function Downloads() {
     const base = "https://github.com/al5ina5/retrosyncd/releases/latest/download";
     const downloads = {
-        portmaster: `${base}/retrosync-portmaster-latest.zip`,
-        macos: `${base}/retrosync-macos-latest.zip`,
-        desktopLove: `${base}/retrosync-desktop-latest.love`,
+        portmaster: `${base}/retrosync-portmaster.zip`,
+        macos: `${base}/retrosync-macos.zip`,
+        desktopLove: `${base}/retrosync.love`,
     };
 
     return (
