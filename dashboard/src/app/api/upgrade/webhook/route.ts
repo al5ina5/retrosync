@@ -72,15 +72,21 @@ export async function POST(request: NextRequest) {
     event.type === "invoice.payment_succeeded" ||
     event.type === "invoice.paid"
   ) {
-    const invoice = event.data.object as Stripe.Invoice;
+    const invoice = event.data.object as Stripe.Invoice & {
+      subscription?: string | Stripe.Subscription | null;
+    };
     const customerId =
       typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
     if (!customerId) {
       return new Response("OK", { status: 200 });
     }
 
-    if (typeof invoice.subscription === "string") {
-      const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+    const subscriptionId =
+      typeof invoice.subscription === "string"
+        ? invoice.subscription
+        : invoice.subscription?.id ?? null;
+    if (subscriptionId) {
+      const subscription = await stripe.subscriptions.retrieve(subscriptionId);
       await setTierFromSubscription(customerId, subscription);
     } else if (event.type === "invoice.payment_succeeded" || event.type === "invoice.paid") {
       await setTierByCustomer(customerId, true);
