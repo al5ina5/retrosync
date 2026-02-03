@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 
 export const FREE_MAX_DEVICES = 2;
 export const FREE_MAX_SHARED_SAVES = 3;
+export const FREE_MAX_DASHBOARD_DOWNLOADS_PER_WEEK = 5;
 
 export function isPaidTier(tier?: string | null): boolean {
   return tier === "paid";
@@ -54,6 +55,31 @@ export async function canEnableSharedSave(
     return {
       allowed: false,
       reason: `Free plan allows up to ${FREE_MAX_SHARED_SAVES} shared saves. Upgrade to sync more games across devices.`,
+      count,
+    };
+  }
+
+  return { allowed: true, count };
+}
+
+export async function canDownloadDashboardSave(
+  userId: string
+): Promise<{ allowed: boolean; reason?: string; count?: number }> {
+  const tier = await getUserTier(userId);
+  if (isPaidTier(tier)) return { allowed: true };
+
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+  const count = await prisma.downloadEvent.count({
+    where: {
+      userId,
+      createdAt: { gte: since },
+    },
+  });
+
+  if (count >= FREE_MAX_DASHBOARD_DOWNLOADS_PER_WEEK) {
+    return {
+      allowed: false,
+      reason: `Free plan allows up to ${FREE_MAX_DASHBOARD_DOWNLOADS_PER_WEEK} downloads per week. Upgrade to download more.`,
       count,
     };
   }

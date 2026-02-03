@@ -32,7 +32,8 @@ export async function POST(request: NextRequest) {
   if (event.type === "checkout.session.completed") {
     const session = event.data.object as Stripe.Checkout.Session;
     const userId = session.client_reference_id;
-    const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
+    const customerId =
+      typeof session.customer === "string" ? session.customer : session.customer?.id;
 
     if (!userId) {
       console.error("checkout.session.completed missing client_reference_id");
@@ -48,5 +49,64 @@ export async function POST(request: NextRequest) {
     });
   }
 
+  if (event.type === "customer.subscription.updated") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id ?? null;
+    await setTierFromSubscription(customerId, subscription);
+  }
+
+  if (event.type === "customer.subscription.deleted") {
+    const subscription = event.data.object as Stripe.Subscription;
+    const customerId =
+      typeof subscription.customer === "string"
+        ? subscription.customer
+        : subscription.customer?.id ?? null;
+    await setTierFromSubscription(customerId, subscription);
+  }
+
+  if (
+    event.type === "invoice.payment_failed" ||
+    event.type === "invoice.payment_succeeded" ||
+    event.type === "invoice.paid"
+  ) {
+    const invoice = event.data.object as Stripe.Invoice;
+    const customerId =
+      typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id ?? null;
+    if (!customerId) {
+      return new Response("OK", { status: 200 });
+    }
+
+    if (typeof invoice.subscription === "string") {
+      const subscription = await stripe.subscriptions.retrieve(invoice.subscription);
+      await setTierFromSubscription(customerId, subscription);
+    } else if (event.type === "invoice.payment_succeeded" || event.type === "invoice.paid") {
+      await setTierByCustomer(customerId, true);
+    } else if (event.type === "invoice.payment_failed") {
+      await setTierByCustomer(customerId, false);
+    }
+  }
+
   return new Response("OK", { status: 200 });
+}
+
+function isPaidStatus(status: Stripe.Subscription.Status): boolean {
+  return status === "active" || status === "trialing";
+}
+
+async function setTierFromSubscription(
+  customerId: string | null,
+  subscription: Stripe.Subscription
+) {
+  await setTierByCustomer(customerId, isPaidStatus(subscription.status));
+}
+
+async function setTierByCustomer(customerId: string | null, paid: boolean) {
+  if (!customerId) return;
+  await prisma.user.updateMany({
+    where: { stripeCustomerId: customerId },
+    data: { subscriptionTier: paid ? "paid" : "free" },
+  });
 }

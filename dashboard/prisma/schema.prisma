@@ -19,6 +19,7 @@ model User {
   devices          Device[]
   pairingCodes     PairingCode[]
   saves            Save[]
+  downloadEvents   DownloadEvent[]
 }
 
 model Device {
@@ -115,6 +116,7 @@ model Save {
   locations    SaveLocation[]
   versions     SaveVersion[]
   syncLogs     SyncLog[]
+  downloadEvents DownloadEvent[]
 
   @@unique([userId, saveKey])
   @@index([userId])
@@ -132,6 +134,7 @@ model SaveVersion {
   device          Device    @relation(fields: [deviceId], references: [id], onDelete: Cascade)
   save            Save      @relation(fields: [saveId], references: [id], onDelete: Cascade)
   syncLogs        SyncLog[]
+  downloadEvents  DownloadEvent[]
 
   @@index([saveId])
   @@index([deviceId])
@@ -156,4 +159,20 @@ model SaveLocation {
   @@unique([saveId, deviceId, localPath])
   @@index([deviceId])
   @@index([saveId])
+}
+
+model DownloadEvent {
+  id            String   @id @default(uuid())
+  userId        String
+  saveId        String?
+  saveVersionId String?
+  createdAt     DateTime @default(now())
+  user          User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  save          Save?    @relation(fields: [saveId], references: [id])
+  saveVersion   SaveVersion? @relation(fields: [saveVersionId], references: [id])
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([saveId])
+  @@index([saveVersionId])
 }

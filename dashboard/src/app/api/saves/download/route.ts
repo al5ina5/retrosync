@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 import { getPresignedUrl } from '@/lib/s3'
+import { canDownloadDashboardSave } from '@/lib/planLimits'
 
 export const dynamic = 'force-dynamic'
 
@@ -35,6 +36,11 @@ export async function GET(request: NextRequest) {
       return errorResponse('Save file not found', 404)
     }
 
+    const downloadLimit = await canDownloadDashboardSave(user.userId)
+    if (!downloadLimit.allowed) {
+      return errorResponse(downloadLimit.reason || 'Download limit reached', 402)
+    }
+
     // If deviceId is provided, ensure it belongs to the user and get that device's latest version.
     const latestVersion = await prisma.saveVersion.findFirst({
       where: {
@@ -44,7 +50,7 @@ export async function GET(request: NextRequest) {
           : { device: { userId: user.userId } }),
       },
       orderBy: { uploadedAt: 'desc' },
-      select: { storageKey: true },
+      select: { id: true, storageKey: true },
     })
 
     if (!latestVersion) {
@@ -57,10 +63,17 @@ export async function GET(request: NextRequest) {
       save.displayName
     )
 
+    await prisma.downloadEvent.create({
+      data: {
+        userId: user.userId,
+        saveId: save.id,
+        saveVersionId: latestVersion.id,
+      },
+    })
+
     return successResponse({ url })
   } catch (error) {
     console.error('Get download URL error:', error)
     return errorResponse('Failed to generate download URL', 500)
   }
 }
-

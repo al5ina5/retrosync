@@ -1,6 +1,6 @@
 import { NextRequest } from 'next/server'
 import { uploadFile, fileExists, deleteFile, BUCKET_NAME } from '@/lib/s3'
-import { successResponse, errorResponse } from '@/lib/utils'
+import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
 
 /**
  * GET /api/debug/s3-test
@@ -15,6 +15,9 @@ export async function GET(_request: NextRequest) {
   const body = Buffer.from('retrosync s3 health check', 'utf8')
 
   try {
+    if (!isDebugAllowed(_request)) {
+      return unauthorizedResponse()
+    }
     // Upload
     await uploadFile(key, body, 'text/plain')
 
@@ -40,3 +43,13 @@ export async function GET(_request: NextRequest) {
   }
 }
 
+function isDebugAllowed(request: NextRequest): boolean {
+  if (process.env.NODE_ENV !== 'production') return true
+  const token = process.env.DEBUG_TOKEN
+  if (!token) return false
+  const headerToken = request.headers.get('x-debug-token')
+  if (headerToken && headerToken === token) return true
+  const auth = request.headers.get('authorization')
+  if (auth && auth.startsWith('Bearer ') && auth.substring(7) === token) return true
+  return false
+}
