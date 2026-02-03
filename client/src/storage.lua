@@ -33,7 +33,7 @@ function M.saveCode(code)
 end
 
 function M.loadServerUrl(state)
-    -- Allow explicit override via environment (useful for local testing).
+    -- Env override for local testing; otherwise use hardcoded default from config.
     local envUrl = os.getenv("RETROSYNC_SERVER_URL")
     if envUrl and envUrl ~= "" then
         envUrl = envUrl:match("^%s*(.-)%s*$")
@@ -45,47 +45,8 @@ function M.loadServerUrl(state)
             return envUrl
         end
     end
-
-    -- On macOS fused .app, prefer baked-in server_url from the app bundle so the
-    -- release build always uses production API regardless of PWD or stray files.
-    if love and love.filesystem and love.filesystem.getSource and love.system and love.system.getOS and love.system.getOS() == "OS X" then
-        local source = love.filesystem.getSource()
-        if source and source ~= "" and not source:match("%.love$") then
-            local bundleServerUrlFile = source .. "/data/server_url"
-            local f = io.open(bundleServerUrlFile, "r")
-            if f then
-                local line = f:read("*line")
-                f:close()
-                if line then
-                    line = line:match("^%s*(.-)%s*$")
-                    if line and line ~= "" then
-                        if line:sub(-1) == "/" then
-                            line = line:sub(1, -2)
-                        end
-                        state.serverUrl = line
-                        return line
-                    end
-                end
-            end
-        end
-    end
-
-    local file = io.open(config.SERVER_URL_FILE, "r")
-    if file then
-        local line = file:read("*line")
-        file:close()
-        if line then
-            line = line:match("^%s*(.-)%s*$")
-            if line and line ~= "" then
-                if line:sub(-1) == "/" then
-                    line = line:sub(1, -2)
-                end
-                state.serverUrl = line
-                return line
-            end
-        end
-    end
-    return nil
+    state.serverUrl = config.SERVER_URL
+    return config.SERVER_URL
 end
 
 function M.loadApiKey(state)

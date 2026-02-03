@@ -61,12 +61,7 @@ function love.load()
     log.logMessage("Data directory: " .. config.DATA_DIR)
     
     storage.loadServerUrl(state)
-    if state.serverUrl and state.serverUrl ~= "" then
-        log.logMessage("Using server URL from config: " .. state.serverUrl)
-    else
-        state.serverUrl = config.SERVER_URL
-        log.logMessage("Using default server URL: " .. state.serverUrl)
-    end
+    log.logMessage("Server URL: " .. (state.serverUrl or config.SERVER_URL or ""))
     
     storage.loadApiKey(state)
     storage.loadDeviceName(state)
@@ -330,24 +325,6 @@ function storage.saveCode(code)
         file:write(code)
         file:close()
     end
-end
-
-function loadServerUrl()
-    local file = io.open(config.SERVER_URL_FILE, "r")
-    if file then
-        local line = file:read("*line")
-        file:close()
-        if line then
-            line = line:match("^%s*(.-)%s*$")
-            if line and line ~= "" then
-                if line:sub(-1) == "/" then
-                    line = line:sub(1, -2)
-                end
-                return line
-            end
-        end
-    end
-    return nil
 end
 
 function loadApiKey()

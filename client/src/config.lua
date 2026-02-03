@@ -5,6 +5,13 @@
 local M = {}
 
 local function getAppDirectory()
+    -- On macOS fused .app, always use the app bundle so DATA_DIR works from any folder (Downloads, etc.).
+    if love and love.filesystem and love.filesystem.getSource and love.system and love.system.getOS and love.system.getOS() == "OS X" then
+        local source = love.filesystem.getSource()
+        if source and source ~= "" and not source:match("%.love$") then
+            return source
+        end
+    end
     local pwd = os.getenv("PWD")
     if pwd and pwd ~= "" and pwd ~= "/" then
         return pwd
