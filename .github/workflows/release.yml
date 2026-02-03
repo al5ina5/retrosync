@@ -24,8 +24,12 @@ jobs:
           fi
           cd client && ./build/portmaster/build.sh
 
+      - name: Verify PortMaster output
+        run: |
+          test -d client/dist/portmaster || { echo "Missing client/dist/portmaster"; exit 1; }
+          test -f client/dist/portmaster/RetroSync/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
+
       - name: Zip PortMaster package
-        if: hashFiles('client/dist/portmaster/**') != ''
         run: |
           V="${{ github.ref_name }}"
           cd client/dist/portmaster
@@ -36,7 +40,6 @@ jobs:
           cp dist/portmaster/RetroSync/RetroSync.love "retrosync-${V}.love" 2>/dev/null || true
 
       - name: Upload PortMaster artifacts
-        if: hashFiles('client/dist/portmaster/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: portmaster-${{ github.ref_name }}
@@ -58,8 +61,12 @@ jobs:
           fi
           cd client && ./build/macos/build.sh
 
+      - name: Verify macOS output
+        run: |
+          test -d client/dist/macos || { echo "Missing client/dist/macos"; exit 1; }
+          test -f client/dist/macos/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
+
       - name: Zip macOS dist
-        if: hashFiles('client/dist/macos/**') != ''
         run: |
           V="${{ github.ref_name }}"
           cd client/dist/macos
@@ -68,7 +75,6 @@ jobs:
           cd ../..
 
       - name: Upload macOS artifact
-        if: hashFiles('client/dist/macos/**') != ''
         uses: actions/upload-artifact@v4
         with:
           name: macos-${{ github.ref_name }}
@@ -85,12 +91,14 @@ jobs:
       - uses: actions/checkout@v4
 
       - name: Download PortMaster artifacts
+        if: needs.build-portmaster.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: portmaster-${{ github.ref_name }}
         continue-on-error: true
 
       - name: Download macOS artifacts
+        if: needs.build-macos.result == 'success'
         uses: actions/download-artifact@v4
         with:
           name: macos-${{ github.ref_name }}
