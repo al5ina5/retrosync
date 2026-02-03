@@ -27,7 +27,17 @@ local function getAppDirectory()
 end
 
 M.APP_DIR = getAppDirectory()
-M.DATA_DIR = M.APP_DIR .. "/data"
+-- On macOS fused .app the bundle is read-only; use LÖVE's writable save directory for data.
+if love and love.filesystem and love.filesystem.getSaveDirectory and love.system and love.system.getOS and love.system.getOS() == "OS X" then
+    local source = love.filesystem.getSource()
+    if source and source ~= "" and not source:match("%.love$") then
+        M.DATA_DIR = love.filesystem.getSaveDirectory() .. "/data"
+    else
+        M.DATA_DIR = M.APP_DIR .. "/data"
+    end
+else
+    M.DATA_DIR = M.APP_DIR .. "/data"
+end
 M.API_KEY_FILE = M.DATA_DIR .. "/api_key"
 M.DEVICE_NAME_FILE = M.DATA_DIR .. "/device_name"
 M.CODE_FILE = M.DATA_DIR .. "/code"
