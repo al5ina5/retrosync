@@ -118,6 +118,16 @@ jobs:
           for f in "portmaster-${V}/retrosync-portmaster-${V}.zip" "portmaster-${V}/retrosync-${V}.love" "macos-${V}/retrosync-macos-${V}.zip"; do
             [ -f "$f" ] && cp "$f" release-assets/
           done
+          # Also publish stable filenames for latest-download URLs.
+          if [ -f "portmaster-${V}/retrosync-portmaster-${V}.zip" ]; then
+            cp "portmaster-${V}/retrosync-portmaster-${V}.zip" "release-assets/retrosync-portmaster-latest.zip"
+          fi
+          if [ -f "portmaster-${V}/retrosync-${V}.love" ]; then
+            cp "portmaster-${V}/retrosync-${V}.love" "release-assets/retrosync-desktop-latest.love"
+          fi
+          if [ -f "macos-${V}/retrosync-macos-${V}.zip" ]; then
+            cp "macos-${V}/retrosync-macos-${V}.zip" "release-assets/retrosync-macos-latest.zip"
+          fi
           ls -la release-assets/
 
       - name: Create GitHub Release

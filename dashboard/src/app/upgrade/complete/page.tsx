@@ -62,7 +62,7 @@ function UpgradeCompleteContent() {
       </div>
 
       <div>
-        <Link href="/dashboard/devices" className="border-4 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-6 py-3 whitespace-nowrap text-lg md:text-2xl">
+        <Link href="/devices" className="border-4 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-6 py-3 whitespace-nowrap text-lg md:text-2xl">
           Sync a Device
         </Link>
       </div>

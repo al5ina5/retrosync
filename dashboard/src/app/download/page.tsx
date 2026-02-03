@@ -4,6 +4,13 @@ import Layout from "@/components/ui/Layout";
 import Link from "next/link";
 
 export default function DownloadPage() {
+  const base = "https://github.com/al5ina5/retrosyncd/releases/latest/download";
+  const downloads = {
+    portmaster: `${base}/retrosync-portmaster-latest.zip`,
+    macos: `${base}/retrosync-macos-latest.zip`,
+    desktopLove: `${base}/retrosync-desktop-latest.love`,
+  };
+
   return (
     <Layout>
       <div className="space-y-6 text-center">
@@ -23,36 +30,36 @@ export default function DownloadPage() {
 
         <div className="grid gap-4 sm:grid-cols-2">
           <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
-            <h3 className="font-medium text-lg mb-2">muOS</h3>
+            <h3 className="font-medium text-lg mb-2">PortMaster (muOS, spruceOS)</h3>
             <p className="text-sm text-gameboy-dark mb-3">
-              Install the RetroSync client on devices running muOS.
+              Install the RetroSync client on handhelds that support PortMaster.
             </p>
             <a
-              href="#"
+              href={downloads.portmaster}
               className="inline-block border-2 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-4 py-2 text-sm"
             >
-              Get for muOS
+              Download PortMaster ZIP
             </a>
           </div>
           <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
-            <h3 className="font-medium text-lg mb-2">spruceOS</h3>
+            <h3 className="font-medium text-lg mb-2">macOS</h3>
             <p className="text-sm text-gameboy-dark mb-3">
-              Install the RetroSync client on devices running spruceOS.
+              Fused .app bundle for macOS.
             </p>
             <a
-              href="#"
+              href={downloads.macos}
               className="inline-block border-2 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-4 py-2 text-sm"
             >
-              Get for spruceOS
+              Download macOS ZIP
             </a>
           </div>
         </div>
 
         <div className="border-2 border-gameboy-dark p-4 mt-6">
           <p className="text-sm">
-            <strong>Building from source?</strong> From the repo root:{" "}
-            <code className="bg-gameboy-dark text-gameboy-lightest px-1">npm run client:build</code> then{" "}
-            <code className="bg-gameboy-dark text-gameboy-lightest px-1">npm run client:deploy</code>.
+            <strong>Desktop (Windows/Linux)?</strong> Download the{" "}
+            <a className="underline" href={downloads.desktopLove}>.love file</a>{" "}
+            and run it with LÖVE 11.x.
           </p>
         </div>
       </section>
