@@ -71,7 +71,7 @@ jobs:
           name: macos-${{ github.ref_name }}
           path: client/retrosync-macos-${{ github.ref_name }}.zip
 
-  # --- Build dashboard and create GitHub Release with all client assets ---
+  # --- Create GitHub Release with client assets only ---
   release:
     runs-on: ubuntu-latest
     needs: [build-portmaster, build-macos]
@@ -79,24 +79,6 @@ jobs:
       contents: write
     steps:
       - uses: actions/checkout@v4
-
-      - name: Setup Node
-        uses: actions/setup-node@v4
-        with:
-          node-version: "20"
-          cache: "npm"
-
-      - name: Install root deps
-        run: npm install
-
-      - name: Install dashboard deps
-        run: cd dashboard && yarn install --frozen-lockfile
-
-      - name: Prisma generate
-        run: npm run dashboard:db:generate
-
-      - name: Build dashboard
-        run: npm run dashboard:build
 
       - name: Download PortMaster artifacts
         uses: actions/download-artifact@v4
