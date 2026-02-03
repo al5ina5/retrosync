@@ -33,6 +33,19 @@ function M.saveCode(code)
 end
 
 function M.loadServerUrl(state)
+    -- Allow explicit override via environment (useful for local testing).
+    local envUrl = os.getenv("RETROSYNC_SERVER_URL")
+    if envUrl and envUrl ~= "" then
+        envUrl = envUrl:match("^%s*(.-)%s*$")
+        if envUrl and envUrl ~= "" then
+            if envUrl:sub(-1) == "/" then
+                envUrl = envUrl:sub(1, -2)
+            end
+            state.serverUrl = envUrl
+            return envUrl
+        end
+    end
+
     local file = io.open(config.SERVER_URL_FILE, "r")
     if file then
         local line = file:read("*line")
