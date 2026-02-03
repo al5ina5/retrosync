@@ -1,16 +1,41 @@
 -- src/log.lua
--- Logging and log consolidation for RetroSync client.
+-- Logging to data/logs/YYYY-MM-DD.log with size cap. Single log stream; no ephemeral merge.
 -- Depends: src.config
 
 local config = require("src.config")
 
-local function logMessage(msg)
+local function getLogPath()
+    local dateStr = os.date("%Y-%m-%d")
+    return config.LOGS_DIR .. "/" .. dateStr .. ".log"
+end
+
+local function ensureLogsDir()
+    pcall(function()
+        local dir = config.LOGS_DIR:gsub("'", "'\\''")
+        os.execute("mkdir -p '" .. dir .. "' 2>/dev/null")
+    end)
+end
+
+local function maybeRotate(logPath)
+    local f = io.open(logPath, "r")
+    if not f then return end
+    local size = f:seek("end")
+    f:close()
+    if size and size >= (config.MAX_LOG_FILE_BYTES or (2 * 1024 * 1024)) then
+        local rotPath = logPath:gsub("%.log$", ".1.log")
+        pcall(function()
+            os.execute("mv '" .. logPath:gsub("'", "'\\''") .. "' '" .. rotPath:gsub("'", "'\\''") .. "' 2>/dev/null")
+        end)
+    end
+end
+
+function logMessage(msg)
     local timestamp = os.date("%Y-%m-%d %H:%M:%S")
     local logEntry = "[" .. timestamp .. "] " .. tostring(msg) .. "\n"
-    pcall(function()
-        os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
-    end)
-    local file = io.open(config.LOG_FILE, "a")
+    ensureLogsDir()
+    local logPath = getLogPath()
+    maybeRotate(logPath)
+    local file = io.open(logPath, "a")
     if file then
         pcall(function()
             file:write(logEntry)
@@ -18,68 +43,39 @@ local function logMessage(msg)
         end)
         file:close()
     else
-        print("[LOG ERROR] Failed to open log file: " .. tostring(config.LOG_FILE))
+        print("[LOG ERROR] Failed to open " .. tostring(logPath))
         print(logEntry)
     end
     print(logEntry)
 end
 
-local function consolidateLogs()
-    pcall(function()
-        os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
-    end)
-    local logFiles = {
-        config.DATA_DIR .. "/debug.log",
-        config.DATA_DIR .. "/http_resp.txt",
-        config.DATA_DIR .. "/http_post.txt",
-        config.DATA_DIR .. "/http_err.txt",
-        config.APP_DIR .. "/log.txt",
-        config.DATA_DIR .. "/watcher.log",
-        config.DATA_DIR .. "/muos_autostart.log",
-        "/mnt/SDCARD/Saves/spruce/retrosync.log",
-    }
-    local consolidated = {}
-    for _, logPath in ipairs(logFiles) do
-        local file = io.open(logPath, "r")
-        if file then
-            local content = file:read("*all")
-            file:close()
-            if content and content ~= "" then
-                table.insert(consolidated, "=== Contents from " .. logPath .. " ===\n")
-                table.insert(consolidated, content)
-                table.insert(consolidated, "\n")
-            end
-            if logPath ~= config.LOG_FILE then
-                pcall(function() os.remove(logPath) end)
-            end
-        end
+-- One-time: move old data/debug.log into today's log so we don't lose history. No merge of http/temp files.
+function migrateLegacyLog()
+    ensureLogsDir()
+    local legacyPath = config.DATA_DIR .. "/debug.log"
+    local file = io.open(legacyPath, "r")
+    if not file then return end
+    local content = file:read("*all")
+    file:close()
+    if not content or content == "" then
+        pcall(function() os.remove(legacyPath) end)
+        return
     end
-    if #consolidated > 0 then
-        local file = io.open(config.LOG_FILE, "a")
-        if file then
-            pcall(function()
-                file:write("\n=== Log consolidation at " .. os.date("%Y-%m-%d %H:%M:%S") .. " ===\n")
-                file:write(table.concat(consolidated))
-                file:write("=== End of consolidated logs ===\n\n")
-                file:flush()
-            end)
-            file:close()
-        end
+    local logPath = getLogPath()
+    local out = io.open(logPath, "a")
+    if out then
+        pcall(function()
+            out:write("\n=== Migrated from data/debug.log ===\n")
+            out:write(content)
+            out:write("\n=== End migrated log ===\n\n")
+            out:flush()
+        end)
+        out:close()
     end
-    local logFile = io.open(config.LOG_FILE, "r")
-    if logFile then
-        logFile:seek("end")
-        local size = logFile:seek()
-        logFile:close()
-        if size > 10 * 1024 * 1024 then
-            local backupLog = config.LOG_FILE .. ".old"
-            pcall(function() os.execute("mv '" .. config.LOG_FILE .. "' '" .. backupLog .. "' 2>/dev/null") end)
-            logMessage("Log file rotated (size: " .. size .. " bytes)")
-        end
-    end
+    pcall(function() os.remove(legacyPath) end)
 end
 
 return {
     logMessage = logMessage,
-    consolidateLogs = consolidateLogs,
+    migrateLegacyLog = migrateLegacyLog,
 }

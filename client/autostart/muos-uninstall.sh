@@ -3,8 +3,8 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/muos_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+SIDECAR="$DATA_DIR/autostart_muos.txt"
 
 # Detect MUOS init directory (check both cards)
 INIT_DIR=""
@@ -76,7 +76,7 @@ done
 if [ -n "$RETROSYNC_DIR" ]; then
   WATCHER="$RETROSYNC_DIR/watcher.sh"
   WATCHER_DATA_DIR="$RETROSYNC_DIR/data"
-  PIDFILE="$WATCHER_DATA_DIR/watcher.pid"
+  PIDFILE="$WATCHER_DATA_DIR/watcher/watcher.pid"
   
   # Stop watcher via PID file
   if [ -f "$PIDFILE" ]; then
@@ -94,11 +94,8 @@ if [ -n "$RETROSYNC_DIR" ]; then
   fi
 fi
 
-# Remove install marker
-if [ -f "$MARKER" ]; then
-  rm -f "$MARKER"
-  echo "Removed install marker: $MARKER"
-fi
+# Tell app autostart is disabled (Lua merges into config.json)
+echo "0" > "$SIDECAR"
 
 echo "RetroSync muOS autostart integration uninstalled."
 

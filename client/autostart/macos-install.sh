@@ -9,8 +9,8 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/macos_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+CONFIG_JSON="$DATA_DIR/config.json"
 
 # Ensure APPDIR is absolute
 if [ "${APPDIR#/}" = "$APPDIR" ]; then
@@ -32,11 +32,15 @@ fi
 LAUNCH_AGENTS="$HOME/Library/LaunchAgents"
 PLIST="$LAUNCH_AGENTS/com.retrosync.watcher.plist"
 LABEL="com.retrosync.watcher"
-LOG_PATH="$DATA_DIR/watcher_launchd.log"
 
 mkdir -p "$LAUNCH_AGENTS"
 
-# Generate plist with embedded client path
+# Ensure DATA_DIR is absolute so watcher uses same dir as LÖVE app (config/logs)
+if [ "${DATA_DIR#/}" = "$DATA_DIR" ]; then
+  DATA_DIR="$(cd "$DATA_DIR" 2>/dev/null && pwd)" || DATA_DIR="$APPDIR/data"
+fi
+
+# Generate plist: pass APPDIR and DATA_DIR so watcher uses LÖVE data dir and writes to data/watcher/
 cat > "$PLIST" << EOF
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
@@ -54,11 +58,9 @@ cat > "$PLIST" << EOF
 	<array>
 		<string>/bin/bash</string>
 		<string>$APPDIR/watcher.sh</string>
+		<string>$APPDIR</string>
+		<string>$DATA_DIR</string>
 	</array>
-	<key>StandardOutPath</key>
-	<string>$LOG_PATH</string>
-	<key>StandardErrorPath</key>
-	<string>$LOG_PATH</string>
 </dict>
 </plist>
 EOF
@@ -68,10 +70,30 @@ launchctl unload "$PLIST" 2>/dev/null || true
 
 # Load the agent
 if launchctl load "$PLIST"; then
-  touch "$MARKER"
+  # Update config.json so the app shows autostart enabled. Prefer jq; fall back to Ruby (built into macOS).
+  if command -v jq >/dev/null 2>&1; then
+    if [ -f "$CONFIG_JSON" ]; then
+      jq '.autostart = "macos"' "$CONFIG_JSON" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON"
+    else
+      printf '%s\n' '{"autostart":"macos"}' > "$CONFIG_JSON"
+    fi
+  else
+    if command -v ruby >/dev/null 2>&1; then
+      if [ -f "$CONFIG_JSON" ]; then
+        ruby -rjson -e "
+          p = ARGV[0]
+          d = File.exist?(p) ? JSON.parse(File.read(p)) : {}
+          d['autostart'] = 'macos'
+          File.write(p, JSON.pretty_generate(d))
+        " "$CONFIG_JSON" 2>/dev/null || true
+      else
+        printf '%s\n' '{"autostart":"macos"}' > "$CONFIG_JSON"
+      fi
+    fi
+  fi
   echo "RetroSync macOS autostart installed (plist: $PLIST)."
-  echo "Watcher will run at login. Add macOS save directories via the app (drag-drop) or dashboard; paths are stored in data/scan_paths.json."
-  echo "Check status after boot: launchctl list | grep retrosync   or: ./autostart/macos-status.sh"
+  echo "Watcher will run at login. Config and paths: $DATA_DIR/config.json, $DATA_DIR/scan_paths.json."
+  echo "Watcher runs at login. Check: launchctl list | grep retrosync"
 else
   echo "ERROR: launchctl load failed for $PLIST"
   exit 1

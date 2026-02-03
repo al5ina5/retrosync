@@ -19,7 +19,7 @@ local OPTIONS = {
         local palette = require("src.ui.palette")
         return "Theme: " .. palette.getCurrentThemeName()
     end },
-    { id = "background_toggle", activatableWithArrows = true, getLabel = function() return settings.isBackgroundProcessEnabled() and "Background process: Enabled" or "Background process: Disabled" end },
+    { id = "background_toggle", activatableWithArrows = true, getLabel = function(s) return settings.isBackgroundProcessEnabled(s) and "Background process: Enabled" or "Background process: Disabled" end },
     { id = "unpair", label = "Unpair" },
     { id = "back", label = "Go Back" },
 }
@@ -56,25 +56,25 @@ function M.runOptionAtIndex(index, state, configModule)
     if not opt then return nil end
     if opt.id == "music_toggle" then
         state.musicEnabled = not state.musicEnabled
-        storage.saveAudioPrefs(state)
+        storage.saveConfig(state)
         if state.bgMusic then
             if state.musicEnabled then state.bgMusic:play() else state.bgMusic:pause() end
         end
         return nil
     elseif opt.id == "sounds_toggle" then
         state.soundsEnabled = not state.soundsEnabled
-        storage.saveAudioPrefs(state)
+        storage.saveConfig(state)
         return nil
     elseif opt.id == "theme_toggle" then
         local palette = require("src.ui.palette")
         local nextThemeId = palette.nextTheme()
         palette.setTheme(nextThemeId)
         state.themeId = nextThemeId
-        storage.saveTheme(nextThemeId)
+        storage.saveConfig(state)
         return nil
     elseif opt.id == "background_toggle" then
         if not settings.runToggleBackgroundProcessAsync(state, configModule) then
-            settings.runToggleBackgroundProcessSync()
+            settings.runToggleBackgroundProcessSync(state)
         end
         return nil  -- no tooltip; label updates to show new state
     elseif opt.id == "unpair" then

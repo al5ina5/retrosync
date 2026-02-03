@@ -14,29 +14,19 @@ local download = require("src.download")
 local M = {}
 
 local function uploadSave(filepath)
-    log.logMessage("=== uploadSave START ===")
-    log.logMessage("uploadSave: filepath = " .. tostring(filepath))
-
     if not state.apiKey then
-        log.logMessage("uploadSave: No API key, returning false")
         return false
     end
-    log.logMessage("uploadSave: API key exists")
-
     if not filepath or filepath == "" then
-        log.logMessage("uploadSave: Invalid filepath")
         return false
     end
 
     local filename = filepath:match("[/\\]([^/\\]+)$") or filepath
-    log.logMessage("uploadSave: filename = " .. tostring(filename))
 
     local fileSize = 0
     local fileContent = nil
 
-    log.logMessage("uploadSave: Starting file read operation")
     local ok, err = pcall(function()
-        log.logMessage("uploadSave: Opening file: " .. tostring(filepath))
         local f = io.open(filepath, "rb")
         if not f then
             error("Failed to open file: " .. tostring(filepath))
@@ -75,26 +65,34 @@ local function uploadSave(filepath)
 
     local base64Content = nil
     local base64Ok, base64Err = pcall(function()
+        -- Use unsanitized path for io.open so DATA_DIR with spaces (e.g. "Application Support") works.
         local tempFile = config.DATA_DIR .. "/temp_upload_" .. os.time() .. "_" .. math.random(10000) .. ".bin"
-        tempFile = tempFile:gsub("[^%w/%.%-_]", "_")
         local tempF = io.open(tempFile, "wb")
-        if not tempF then return false end
+        if not tempF then
+            log.logMessage("uploadSave: Base64 temp file open failed: " .. tostring(tempFile))
+            return false
+        end
         tempF:write(fileContent)
         tempF:close()
+        -- Escape for shell: single-quote wrap and escape single quotes inside.
         local escapedTempFile = tempFile:gsub("'", "'\\''")
         local cmd = "base64 < '" .. escapedTempFile .. "' 2>/dev/null"
         local handle = io.popen(cmd)
         if not handle then
+            log.logMessage("uploadSave: Base64 io.popen failed for: " .. tostring(cmd))
             os.execute("rm -f '" .. escapedTempFile .. "' 2>/dev/null")
             return false
         end
         base64Content = handle:read("*all")
         pcall(function() handle:close() end)
+        os.execute("rm -f '" .. escapedTempFile .. "' 2>/dev/null")
         if base64Content then
             base64Content = base64Content:gsub("%s+", "")
         end
-        os.execute("rm -f '" .. escapedTempFile .. "' 2>/dev/null")
-        if not base64Content or base64Content == "" then return false end
+        if not base64Content or base64Content == "" then
+            log.logMessage("uploadSave: Base64 read empty from base64 command")
+            return false
+        end
         return true
     end)
 
@@ -106,11 +104,6 @@ local function uploadSave(filepath)
     local headers = {["X-API-Key"] = state.apiKey}
     local mtimeSec = fs.getFileMtimeSeconds(filepath)
     local mtimeMs = mtimeSec and (mtimeSec * 1000) or nil
-    if mtimeMs then
-        log.logMessage("uploadSave: File mtime: " .. mtimeMs .. " ms (" .. os.date("%Y-%m-%d %H:%M:%S", mtimeSec) .. ")")
-    else
-        log.logMessage("uploadSave: WARNING - No mtime available, server will use upload time")
-    end
     local payload = {
         filePath = filename,
         fileSize = fileSize,
@@ -141,24 +134,18 @@ local function uploadSave(filepath)
         if result and result.success then
             local data = result.data or result
             if data.skipped then
-                log.logMessage("uploadSave: Server skipped upload for " .. filename .. " (unchanged or sync disabled)")
                 return "skipped"
             end
-            log.logMessage("uploadSave: Successfully uploaded " .. filename)
             device_history.addEntry(state, "upload", filename, filepath, fileSize, os.time())
             return true
         else
-            log.logMessage("uploadSave: Server returned error for " .. filename)
             return false
         end
     end
-    log.logMessage("uploadSave: No response from server for " .. filename)
     return false
 end
 
 function M.uploadSaves()
-    log.logMessage("=== uploadSaves CALLED ===")
-
     if not state.apiKey then
         log.logMessage("uploadSaves: No API key, cannot upload")
         state.currentState = config.STATE_SHOWING_CODE
@@ -193,7 +180,6 @@ function M.uploadSaves()
     state.uploadFailedFiles = {}
     state.uploadJustStarted = true
     state.uploadStartTimer = 0
-    log.logMessage("uploadSaves: State immediately set to UPLOADING, work deferred (chunked per frame)")
 end
 
 local function getFileSize(path)
@@ -205,9 +191,7 @@ local function getFileSize(path)
 end
 
 function M.doUploadDiscover()
-    log.logMessage("=== doUploadDiscover START ===")
     local ok, err = pcall(function()
-        log.logMessage("uploadSaves: Calling findSaveFiles()")
         local findOk, findResult = pcall(function() return fs.findSaveFiles() end)
         if not findOk then
             log.logMessage("CRASH in findSaveFiles: " .. tostring(findResult))
@@ -215,14 +199,13 @@ function M.doUploadDiscover()
         end
         local saveFiles = findResult
         if not saveFiles then
-            log.logMessage("uploadSaves: findSaveFiles returned nil")
             state.uploadProgress = "Error finding save files"
             state.uploadJustStarted = false
             state.uploadStartTimer = 0
             state.currentState = config.STATE_CONNECTED
             return
         end
-        log.logMessage("uploadSaves: Found " .. #saveFiles .. " save files")
+        -- saveFiles count logged by findSaveFiles
         if #saveFiles == 0 then
             state.uploadProgress = "No save files found"
             state.uploadJustStarted = false
@@ -262,7 +245,7 @@ function M.doUploadDiscover()
                 end
             end
         else
-            log.logMessage("uploadSaves: No manifest (will upload all): " .. tostring(manErr or "unknown"))
+            -- no manifest: will upload all
         end
 
         state.uploadQueue = {}
@@ -311,12 +294,12 @@ function M.doUploadDiscover()
                 if localSize and localSize == cloudEntry.byteSize then
                     needUpload = false
                     skipReason = "size match, timestamps unavailable (path match)"
-                    log.logMessage("uploadSaves: SIZE MATCH (no timestamp) " .. tostring(fpath) .. " local=" .. localSize .. " cloud=" .. cloudEntry.byteSize)
+                    -- size match, skip
                 end
             end
 
             if not needUpload then
-                log.logMessage("uploadSaves: SKIP (" .. (skipReason or "unknown") .. ") " .. tostring(fpath))
+                -- skip (unchanged)
             else
                 table.insert(state.uploadQueue, fpath)
             end
@@ -326,12 +309,11 @@ function M.doUploadDiscover()
         state.uploadNextIndex = 1
         state.uploadFailedFiles = {}
         state.uploadInProgress = (#state.uploadQueue > 0)
-        log.logMessage("uploadSaves: Will upload " .. state.uploadTotal .. " files (of " .. #saveFiles .. " discovered)")
+        log.logMessage("uploadSaves: " .. state.uploadTotal .. " files to upload (of " .. #saveFiles .. " discovered)")
         if state.uploadTotal == 0 then
             state.uploadProgress = "All files already synced"
             state.uploadJustStarted = false
             state.uploadStartTimer = 0
-            log.logMessage("uploadSaves: Starting download phase (no uploads needed)")
             download.downloadSaves(true)
             return
         end
@@ -344,41 +326,29 @@ function M.doUploadDiscover()
         state.uploadStartTimer = 0
         state.currentState = config.STATE_CONNECTED
     end
-    log.logMessage("=== doUploadDiscover END ===")
 end
 
 function M.doUploadOneFile()
-    log.logMessage("=== doUploadOneFile (index " .. tostring(state.uploadNextIndex) .. ") ===")
     if state.uploadCancelled then
-        log.logMessage("uploadSaves: Upload cancelled by user, stopping")
         state.uploadInProgress = false
         state.uploadJustStarted = false
         state.uploadStartTimer = 0
         if #state.uploadFailedFiles > 0 then
-            log.logMessage("uploadSaves: FAILED FILES SUMMARY:")
-            for _, fail in ipairs(state.uploadFailedFiles) do
-                log.logMessage("uploadSaves:   File " .. fail.index .. ": " .. fail.path .. " - " .. fail.reason)
-            end
+            log.logMessage("uploadSaves: " .. #state.uploadFailedFiles .. " file(s) failed")
         end
         state.currentState = config.STATE_CONNECTED
         return
     end
     if state.uploadNextIndex > state.uploadTotal then
-        log.logMessage("uploadSaves: All files processed")
         state.uploadInProgress = false
         state.uploadJustStarted = false
         state.uploadStartTimer = 0
         if #state.uploadFailedFiles > 0 then
-            log.logMessage("uploadSaves: FAILED FILES SUMMARY:")
-            for _, fail in ipairs(state.uploadFailedFiles) do
-                log.logMessage("uploadSaves:   File " .. fail.index .. ": " .. fail.path .. " - " .. fail.reason)
-            end
+            log.logMessage("uploadSaves: " .. #state.uploadFailedFiles .. " file(s) failed")
         else
-            log.logMessage("uploadSaves: All files uploaded successfully!")
+            log.logMessage("uploadSaves: " .. state.uploadSuccess .. "/" .. state.uploadTotal .. " uploaded")
         end
-        log.logMessage("uploadSaves: Complete - " .. state.uploadSuccess .. "/" .. state.uploadTotal .. " files uploaded")
         state.syncSessionHadUpload = (state.uploadSuccess > 0)
-        log.logMessage("uploadSaves: Starting download phase after uploads complete")
         download.downloadSaves(true)
         return
     end

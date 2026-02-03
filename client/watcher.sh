@@ -19,14 +19,24 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GAMEDIR="$(cd "$SCRIPT_DIR" && pwd)"
 
-DATA_DIR="$GAMEDIR/data"
+# Use passed DATA_DIR (LOVE/app data dir) so watcher files live with config/logs; else default to GAMEDIR/data.
+if [[ -n "${2:-}" ]]; then
+  DATA_DIR="$2"
+else
+  DATA_DIR="$GAMEDIR/data"
+fi
 mkdir -p "$DATA_DIR"
 
-PIDFILE="$DATA_DIR/watcher.pid"
-STATEFILE="$DATA_DIR/watcher_state.tsv"
-LOGFILE="$DATA_DIR/watcher.log"
+# Watcher runtime files go in a watcher/ subfolder under DATA_DIR (same base as app config/logs).
+WATCHER_DIR="${DATA_DIR}/watcher"
+mkdir -p "$WATCHER_DIR"
 
-API_KEY_FILE="$DATA_DIR/api_key"
+PIDFILE="$WATCHER_DIR/watcher.pid"
+STATEFILE="$WATCHER_DIR/watcher_state.tsv"
+LOGFILE="$WATCHER_DIR/watcher.log"
+
+# App config (shared with LÖVE app; single config.json)
+CONFIG_JSON="$DATA_DIR/config.json"
 SERVER_URL_FILE="$DATA_DIR/server_url"
 
 DEFAULT_SERVER_URL="https://retrosync.vercel.app"
@@ -132,13 +142,19 @@ read_server_url() {
 }
 
 read_api_key() {
-  if [[ -f "$API_KEY_FILE" ]]; then
-    local key
-    key="$(head -n 1 "$API_KEY_FILE" | tr -d '\r\n' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    if [[ -n "$key" ]]; then
-      printf '%s' "$key"
-      return 0
-    fi
+  if [[ ! -f "$CONFIG_JSON" ]]; then
+    return 1
+  fi
+  local key
+  # Prefer jq; fallback to grep/sed for BusyBox/macOS without jq
+  if command -v jq >/dev/null 2>&1; then
+    key="$(jq -r '.apiKey // empty' "$CONFIG_JSON" 2>/dev/null)"
+  else
+    key="$(tr -d '\n\r' < "$CONFIG_JSON" 2>/dev/null | grep -oE '"apiKey"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -nE 's/.*:[[:space:]]*"([^"]*)"$/\1/p' | head -n 1)"
+  fi
+  if [[ -n "$key" ]]; then
+    printf '%s' "$key"
+    return 0
   fi
   return 1
 }
@@ -239,9 +255,9 @@ upload_file() {
     "$local_ms")"
 
   # Write JSON payload to a temp file so we don't hit shell ARG_MAX limits with large saves.
-  local tmp_payload="$DATA_DIR/watcher_payload.$$.json"
-  local tmp_resp="$DATA_DIR/watcher_http_resp.$$.txt"
-  local tmp_err="$DATA_DIR/watcher_http_err.$$.txt"
+  local tmp_payload="$WATCHER_DIR/watcher_payload.$$.json"
+  local tmp_resp="$WATCHER_DIR/watcher_http_resp.$$.txt"
+  local tmp_err="$WATCHER_DIR/watcher_http_err.$$.txt"
   rm -f "$tmp_payload" "$tmp_resp" "$tmp_err"
   printf '%s' "$payload" > "$tmp_payload" || {
     log "upload: failed to write payload for $(printf '%q' "$path")"
@@ -277,15 +293,17 @@ upload_file() {
 
 discover_files() {
   # Output lines: path<TAB>mtime<TAB>size
-  # Roots: scan_paths_flat.txt (written by client from scan_paths.json), else legacy custom_paths.txt, else defaults.
+  # Roots: scan_paths.json (via jq), else legacy custom_paths.txt, else defaults.
   local -a locations=()
-  if [[ -f "$DATA_DIR/scan_paths_flat.txt" ]]; then
-    while IFS= read -r line || [[ -n "$line" ]]; do
-      line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-      [[ -z "$line" ]] && continue
-      [[ "$line" == *"/" ]] && line="${line%/}"
-      locations+=( "$line" )
-    done < "$DATA_DIR/scan_paths_flat.txt"
+  if [[ -f "$DATA_DIR/scan_paths.json" ]]; then
+    if command -v jq >/dev/null 2>&1; then
+      while IFS= read -r line || [[ -n "$line" ]]; do
+        line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+        [[ -z "$line" ]] && continue
+        [[ "$line" == *"/" ]] && line="${line%/}"
+        locations+=( "$line" )
+      done < <(jq -r '.paths[]?.path // empty' "$DATA_DIR/scan_paths.json" 2>/dev/null || true)
+    fi
   fi
   if [[ ${#locations[@]} -eq 0 ]] && [[ -f "$DATA_DIR/custom_paths.txt" ]]; then
     locations=( "/mnt/sdcard/Saves/saves" "/mnt/mmc/MUOS/save/file" )
@@ -364,7 +382,7 @@ MIN_INTERVAL_SEC=10
 MAX_INTERVAL_SEC=60
 IDLE_BACKOFF_FACTOR=2
 
-CONF="$DATA_DIR/watcher.conf"
+CONF="$WATCHER_DIR/watcher.conf"
 if [[ -f "$CONF" ]]; then
   # shellcheck disable=SC1090
   source "$CONF" || true
@@ -381,8 +399,8 @@ while true; do
   fi
   server_url="$(read_server_url)"
 
-  new_tmp="$DATA_DIR/watcher_state.new.$$"
-  old_tmp="$DATA_DIR/watcher_state.old.$$"
+  new_tmp="$WATCHER_DIR/watcher_state.new.$$"
+  old_tmp="$WATCHER_DIR/watcher_state.old.$$"
   cp -f "$STATEFILE" "$old_tmp" 2>/dev/null || : > "$old_tmp"
 
   # Build new snapshot
@@ -403,7 +421,7 @@ while true; do
   fi
 
   # Compute changed set (new file or mtime/size changed)
-  changed_tmp="$DATA_DIR/watcher_changed.$$"
+  changed_tmp="$WATCHER_DIR/watcher_changed.$$"
   
   # FIX: When old_tmp is empty, all files in new_tmp are "new" and should be uploaded.
   # The standard NR==FNR awk idiom fails when the first file is empty because

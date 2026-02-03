@@ -71,8 +71,8 @@ So: **read/write everything through `scan_paths.json`**; in-memory state is a ca
 
 - **Single source**: Read `data/scan_paths.json`.  
 - **No hardcoded paths**: All roots come from the file.  
-- **Parsing**: Prefer `jq` if available (e.g. `jq -r '.paths[]?.path // empty'`). If `jq` is not available (e.g. minimal BusyBox), fallback: **client (or a small script) also writes a flat `data/scan_paths_flat.txt`** (one path per line) whenever it writes `scan_paths.json`. Watcher then: if `scan_paths_flat.txt` exists, use it; else try `jq` on JSON; else no roots (or keep legacy `custom_paths.txt` read once for migration).  
-- **Recommendation**: Client writes both `scan_paths.json` and `scan_paths_flat.txt` on every save. Watcher only reads `scan_paths_flat.txt`. No dependency on `jq`; one canonical store (JSON), one derived file for the shell.
+- **Parsing**: Watcher reads `data/scan_paths.json` via `jq -r '.paths[]?.path // empty'` when jq is available. If jq is not available (e.g. minimal BusyBox), watcher falls back to legacy `custom_paths.txt` then hardcoded defaults.
+- **Single file**: Only `scan_paths.json` is used; no `scan_paths_flat.txt`. Client writes only the JSON; watcher reads the JSON with jq.
 
 ### 5. Server and dashboard
 
@@ -87,20 +87,20 @@ So: **read/write everything through `scan_paths.json`**; in-memory state is a ca
 
 ### 7. Migration
 
-- If `scan_paths.json` is missing but `custom_paths.txt` exists: load custom paths from txt, build path entries (defaults from `getDefaultPaths()` + custom from file), write `scan_paths.json` and `scan_paths_flat.txt`, then stop reading `custom_paths.txt`.
+- If `scan_paths.json` is missing but `custom_paths.txt` exists: load custom paths from txt, build path entries (defaults from `getDefaultPaths()` + custom from file), write `scan_paths.json`, then stop reading `custom_paths.txt`.
 - Remove all references to `custom_paths.txt` and `CUSTOM_PATHS_FILE` after migration.
 
 ### 8. Files to add/change/remove
 
 | Area | Add | Change | Remove |
 |------|-----|--------|--------|
-| Config | `SCAN_PATHS_FILE`, `SCAN_PATHS_FLAT_FILE` | — | `CUSTOM_PATHS_FILE` |
+| Config | `SCAN_PATHS_FILE` | — | `CUSTOM_PATHS_FILE`, `SCAN_PATHS_FLAT_FILE` |
 | scan_paths.lua | Load/save JSON; return entries from file/defaults | getDefaultPaths only; getScanPaths from state built from file | — |
 | storage.lua | — | Replace load/save/add custom paths with delegating to scan_paths + file write | loadCustomPaths, saveCustomPaths, addTrackablePath (or move to scan_paths) |
 | state.lua | `scanPathEntries` or keep single list | Drop `customTrackablePaths` in favor of one list from file | — |
 | api.lua | — | Build payload from file/state; on response overwrite file | — |
 | fs.lua | — | findSaveFiles uses path list from state (from file) | — |
-| watcher.sh | Read scan_paths_flat.txt (and optional JSON) | Remove hardcoded locations; read only from file(s) | custom_paths.txt |
+| watcher.sh | Read scan_paths.json via jq | Remove hardcoded locations; read only from file(s); fallback custom_paths.txt then defaults | custom_paths.txt, scan_paths_flat.txt |
 | main.lua | Load scan_paths at startup; optional GET scan-paths when paired | — | loadCustomPaths |
 | UI (connected, custom_paths) | — | Use single path list from state | — |
 | Dashboard | — | Optional: DELETE scan path | — |
@@ -108,7 +108,7 @@ So: **read/write everything through `scan_paths.json`**; in-memory state is a ca
 ### 9. Summary
 
 - **One canonical file**: `scan_paths.json` (path + kind per entry).  
-- **One derived file for watcher**: `scan_paths_flat.txt` (one path per line), written whenever we write the JSON.  
+- **One file for paths**: `scan_paths.json` only; watcher reads it via jq (no flat file).  
 - **Single source of defaults**: `scan_paths.lua` only.  
 - **Sync**: Device writes file → heartbeat sends list → server stores; heartbeat response returns list → device overwrites file. Optionally GET scan-paths on launch when paired.  
 - **No more**: `custom_paths.txt`, hardcoded paths in watcher, or duplicate default lists.

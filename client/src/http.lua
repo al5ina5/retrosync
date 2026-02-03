@@ -46,7 +46,6 @@ function M.httpPost(url, data, headers)
     end)
 
     log.logMessage("httpPost: " .. url)
-    log.logMessage("  Data: " .. data:sub(1, 100))
 
     local f = io.open(postfile, "w")
     if f then
@@ -68,21 +67,14 @@ function M.httpPost(url, data, headers)
     local timeout = 10
     if dataSize > 100000 then
         timeout = 120
-        log.logMessage("  Large payload detected (" .. dataSize .. " bytes), using extended timeout: " .. timeout .. "s")
     end
 
     local escapedUrl = url:gsub("'", "'\\''")
     local exitCodeFile = config.DATA_DIR .. "/curl_exit.txt"
     local cmd = "curl -s -m " .. timeout .. " -X POST " .. headerStr .. " -d @" .. shell_quote(postfile) .. " " .. shell_quote(url) .. " > " .. shell_quote(tmpfile) .. " 2> " .. shell_quote(errfile) .. "; echo $? > " .. shell_quote(exitCodeFile)
-    log.logMessage("  Command: curl -s -m " .. timeout .. " -X POST ...")
-    log.logMessage("  Executing curl command (timeout: " .. timeout .. "s)...")
-    local startTime = os.time()
     local ok, err = pcall(function()
-        local result = os.execute(cmd)
-        return result
+        return os.execute(cmd)
     end)
-    local endTime = os.time()
-    log.logMessage("  Curl command completed in " .. (endTime - startTime) .. " seconds")
 
     if not ok then
         log.logMessage("ERROR: curl command failed: " .. tostring(err))
@@ -126,11 +118,6 @@ function M.httpPost(url, data, headers)
         file:close()
         if content then
             content = content:match("^%s*(.-)%s*$")
-        end
-        if content and content ~= "" then
-            log.logMessage("  Response: " .. content:sub(1, 200))
-        else
-            log.logMessage("  Response: (empty)")
         end
         pcall(function() os.execute("rm -f " .. shell_quote(postfile) .. " " .. shell_quote(tmpfile) .. " " .. shell_quote(errfile) .. " 2>/dev/null") end)
         return content

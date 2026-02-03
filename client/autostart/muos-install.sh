@@ -3,8 +3,8 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/muos_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+SIDECAR="$DATA_DIR/autostart_muos.txt"
 
 # Log to RetroSync log.txt so we can see what's happening
 INSTALL_LOG="$APPDIR/log.txt"
@@ -152,7 +152,7 @@ fi
 
 echo "Watcher is executable, checking if already running..." >> "\$INIT_LOG" 2>&1
 
-PIDFILE="\$DATA_DIR/watcher.pid"
+PIDFILE="\$DATA_DIR/watcher/watcher.pid"
 if [ -f "\$PIDFILE" ]; then
   PID=\$(cat "\$PIDFILE" 2>/dev/null)
   echo "  Found pidfile with PID: \$PID" >> "\$INIT_LOG" 2>&1
@@ -220,8 +220,7 @@ else
   echo "[muos-install] ERROR: $RETRO_INIT exists but is NOT executable - muOS will not run it!" >> "$INSTALL_LOG" 2>&1
 fi
 
-touch "$MARKER"
-echo "[muos-install] Marker created: $MARKER" >> "$INSTALL_LOG" 2>&1
+echo "1" > "$SIDECAR"
 echo "[muos-install] RetroSync muOS autostart installed (script: $RETRO_INIT)." >> "$INSTALL_LOG" 2>&1
 echo "RetroSync muOS autostart installed (script: $RETRO_INIT)."
 

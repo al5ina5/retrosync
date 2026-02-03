@@ -3,8 +3,8 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/spruce_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+SIDECAR="$DATA_DIR/autostart_spruce.txt"
 
 SPRUCEROOT="/mnt/SDCARD/spruce"
 NETWORK_SVC="$SPRUCEROOT/scripts/networkservices.sh"
@@ -31,8 +31,8 @@ fi
 rm -f "$RETROFUNC"
 rmdir "$RETROFUNC_DIR" 2>/dev/null || true
 
-# Clear install marker
-rm -f "$MARKER"
+# Tell app autostart is disabled (Lua merges into config.json)
+echo "0" > "$SIDECAR"
 
 echo "RetroSync spruce autostart integration uninstalled."
 

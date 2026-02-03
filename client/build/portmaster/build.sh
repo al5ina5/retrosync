@@ -108,7 +108,7 @@ cat > "$TARGET_BASE" << EOF
 ### END INIT INFO
 
 DAEMON="$GAMEDIR/watcher.sh"
-PIDFILE="$GAMEDIR/data/watcher.pid"
+PIDFILE="$GAMEDIR/data/watcher/watcher.pid"
 
 start() {
   if [ -f "\$PIDFILE" ] && kill -0 \$(cat "\$PIDFILE" 2>/dev/null) 2>/dev/null; then
@@ -208,40 +208,38 @@ echo "Device: $DEVICE_NAME ($DEVICE_ARCH)"
 SPRUCENET="/mnt/SDCARD/spruce/scripts/networkservices.sh"
 SPRUCER_INSTALLER="$GAMEDIR/autostart/spruce-install.sh"
 if [ -f "$SPRUCENET" ] && [ -x "$SPRUCER_INSTALLER" ]; then
-    MARKER="$GAMEDIR/data/spruce_autostart_installed"
     mkdir -p "$GAMEDIR/data" 2>/dev/null || true
-    if [ ! -f "$MARKER" ]; then
+    SPRUCE_ALREADY=false
+    if [ -f "$GAMEDIR/data/config.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -e '.autostart == "spruceos"' "$GAMEDIR/data/config.json" >/dev/null 2>&1 && SPRUCE_ALREADY=true
+    fi
+    [ -f "$GAMEDIR/data/spruce_autostart_installed" ] && SPRUCE_ALREADY=true
+    [ -f "$GAMEDIR/data/autostart_spruce.txt" ] && [ "$(cat "$GAMEDIR/data/autostart_spruce.txt" 2>/dev/null)" = "1" ] && SPRUCE_ALREADY=true
+    if [ "$SPRUCE_ALREADY" = false ]; then
         echo "Detected spruceOS, installing RetroSync autostart integration..."
-        "$SPRUCER_INSTALLER" "$GAMEDIR" >/dev/null 2>&1 || true
-        if [ -f "$MARKER" ]; then
-            echo "RetroSync autostart installed for spruceOS"
-        else
-            echo "RetroSync autostart install attempted (see log.txt for details)"
-        fi
+        "$SPRUCER_INSTALLER" "$GAMEDIR" "$GAMEDIR/data" >/dev/null 2>&1 || true
+        echo "RetroSync autostart install attempted for spruceOS (see log if needed)"
     fi
 fi
 
 # Auto-install muOS autostart integration via MUOS/init (one-time, silent if fails)
 MUOS_INSTALLER="$GAMEDIR/autostart/muos-install.sh"
 if [ -x "$MUOS_INSTALLER" ]; then
-    MARKER="$GAMEDIR/data/muos_autostart_installed"
     mkdir -p "$GAMEDIR/data" 2>/dev/null || true
-    if [ ! -f "$MARKER" ]; then
-        # Only proceed if MUOS/init exists on either card
+    MUOS_ALREADY=false
+    if [ -f "$GAMEDIR/data/config.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -e '.autostart == "muos"' "$GAMEDIR/data/config.json" >/dev/null 2>&1 && MUOS_ALREADY=true
+    fi
+    [ -f "$GAMEDIR/data/muos_autostart_installed" ] && MUOS_ALREADY=true
+    [ -f "$GAMEDIR/data/autostart_muos.txt" ] && [ "$(cat "$GAMEDIR/data/autostart_muos.txt" 2>/dev/null)" = "1" ] && MUOS_ALREADY=true
+    if [ "$MUOS_ALREADY" = false ]; then
         if [ -d "/mnt/mmc/MUOS/init" ] || [ -d "/mnt/sdcard/MUOS/init" ]; then
             echo "Detected muOS, installing RetroSync muOS init integration..."
-            # Run installer and capture output to log.txt (not /dev/null) so we can debug
-            "$MUOS_INSTALLER" "$GAMEDIR" >> "$GAMEDIR/log.txt" 2>&1 || true
-            if [ -f "$MARKER" ]; then
-                echo "RetroSync muOS autostart installed (remember to enable User Init Scripts in muOS settings)."
-            else
-                echo "RetroSync muOS autostart install attempted - check log.txt for details"
-            fi
+            "$MUOS_INSTALLER" "$GAMEDIR" "$GAMEDIR/data" >> "$GAMEDIR/log.txt" 2>&1 || true
+            echo "RetroSync muOS autostart install attempted (remember to enable User Init Scripts in muOS settings; check log.txt for details)"
         else
             echo "muOS detected but MUOS/init directory not found on either card"
         fi
-    else
-        echo "muOS autostart already installed (marker exists)"
     fi
 else
     echo "muOS installer not found or not executable at $MUOS_INSTALLER"
@@ -249,7 +247,7 @@ fi
 
 # Start background watcher daemon (if present)
 WATCHER="$GAMEDIR/watcher.sh"
-WATCHER_PIDFILE="$GAMEDIR/data/watcher.pid"
+WATCHER_PIDFILE="$GAMEDIR/data/watcher/watcher.pid"
 mkdir -p "$GAMEDIR/data" 2>/dev/null || true
 if [ -x "$WATCHER" ]; then
     if [ -f "$WATCHER_PIDFILE" ] && kill -0 "$(cat "$WATCHER_PIDFILE" 2>/dev/null)" 2>/dev/null; then

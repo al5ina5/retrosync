@@ -3,8 +3,8 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/spruce_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+SIDECAR="$DATA_DIR/autostart_spruce.txt"
 
 mkdir -p "$DATA_DIR"
 
@@ -36,7 +36,7 @@ start_retrosync_process() {
     return
   fi
 
-  PIDFILE="$RETROSYNC_DIR/data/watcher.pid"
+  PIDFILE="$RETROSYNC_DIR/data/watcher/watcher.pid"
   if [ -f "$PIDFILE" ]; then
     PID=$(cat "$PIDFILE" 2>/dev/null)
     if [ -n "$PID" ] && kill -0 "$PID" 2>/dev/null; then
@@ -57,7 +57,7 @@ start_retrosync_process() {
 
 stop_retrosync_process() {
   RETROSYNC_DIR="/mnt/SDCARD/Roms/PORTS/RetroSync"
-  PIDFILE="$RETROSYNC_DIR/data/watcher.pid"
+  PIDFILE="$RETROSYNC_DIR/data/watcher/watcher.pid"
 
   if [ -f "$PIDFILE" ]; then
     PID=$(cat "$PIDFILE" 2>/dev/null)
@@ -92,6 +92,6 @@ if ! grep -q 'RetroSync watcher check' "$NETWORK_SVC"; then
  # RetroSync watcher check\n if [ -x /mnt/SDCARD/Roms/PORTS/RetroSync/watcher.sh ]; then\n  if ! pgrep -f "/mnt/SDCARD/Roms/PORTS/RetroSync/watcher.sh" >/dev/null 2>&1; then\n   log_message "Network services: RetroSync watcher not running, starting..."\n   start_retrosync_process\n  fi\n fi\n' "$NETWORK_SVC"
 fi
 
-touch "$MARKER"
+echo "1" > "$SIDECAR"
 echo "RetroSync spruce autostart installed."
 

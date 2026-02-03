@@ -9,10 +9,10 @@ if [ "$(uname -s)" != "Darwin" ]; then
 fi
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="$APPDIR/data"
-MARKER="$DATA_DIR/macos_autostart_installed"
+DATA_DIR="${2:-$APPDIR/data}"
+CONFIG_JSON="$DATA_DIR/config.json"
 PLIST="$HOME/Library/LaunchAgents/com.retrosync.watcher.plist"
-PIDFILE="$DATA_DIR/watcher.pid"
+PIDFILE="$DATA_DIR/watcher/watcher.pid"
 WATCHER="$APPDIR/watcher.sh"
 
 # Unload the LaunchAgent (ignore errors if not loaded)
@@ -39,10 +39,15 @@ if [ -f "$WATCHER" ]; then
   pkill -f "$WATCHER" 2>/dev/null && echo "Stopped watcher via pkill" || true
 fi
 
-# Remove install marker
-if [ -f "$MARKER" ]; then
-  rm -f "$MARKER"
-  echo "Removed install marker: $MARKER"
+# Tell app autostart is disabled (update config.json)
+if command -v jq >/dev/null 2>&1; then
+  if [ -f "$CONFIG_JSON" ]; then
+    jq '.autostart = false' "$CONFIG_JSON" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON"
+  else
+    printf '%s\n' '{"autostart":false}' > "$CONFIG_JSON"
+  fi
+else
+  echo "WARN: jq not found; app may still show autostart as enabled until you open Settings"
 fi
 
 echo "RetroSync macOS autostart uninstalled."

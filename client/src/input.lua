@@ -3,6 +3,7 @@
 -- Depends: config (passed), state (passed), log, upload, saves_list, settings.
 
 local log = require("src.log")
+local storage = require("src.storage")
 local upload = require("src.upload")
 local saves_list = require("src.saves_list")
 local settings_options = require("src.settings_options")
@@ -46,6 +47,7 @@ function M.handleKeypressed(state, config, key)
         if key == "return" or key == "space" or key == "a" or key == "x" then
             if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
             state.noPathsMessageDismissed = true
+            storage.saveConfig(state)
             log.logMessage("No paths overlay dismissed")
             return
         end
@@ -197,6 +199,7 @@ function M.handleGamepadpressed(state, config, joystick, button)
         if button == "a" then
             if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
             state.noPathsMessageDismissed = true
+            storage.saveConfig(state)
             log.logMessage("No paths overlay dismissed (gamepad)")
         end
         return
@@ -327,6 +330,7 @@ function M.handleMousepressed(state, config, x, y, button)
         if button == 1 then  -- left click
             if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
             state.noPathsMessageDismissed = true
+            storage.saveConfig(state)
             log.logMessage("No paths overlay dismissed (click)")
         end
     end

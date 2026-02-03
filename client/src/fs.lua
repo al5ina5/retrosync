@@ -32,7 +32,6 @@ local function getFileMtimeSeconds(path)
         local mtime0 = tonumber(out0)
         if mtime0 and mtime0 > 0 then
             if isValidTimestamp(mtime0) then
-                log.logMessage("getFileMtimeSeconds: Success with date -r method - mtime = " .. mtime0 .. " seconds")
                 return mtime0
             else
                 log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (date -r): " .. mtime0 .. " (" .. os.date("%Y-%m-%d", mtime0) .. ") - returning nil for size-based comparison")
@@ -51,7 +50,6 @@ local function getFileMtimeSeconds(path)
         local mtime1 = tonumber(out1)
         if mtime1 then
             if isValidTimestamp(mtime1) then
-                log.logMessage("getFileMtimeSeconds: Success with GNU stat method - mtime = " .. mtime1 .. " seconds")
                 return mtime1
             else
                 log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (GNU stat): " .. mtime1 .. " - returning nil")
@@ -62,7 +60,6 @@ local function getFileMtimeSeconds(path)
     
     -- Try method 2: stat -t (POSIX stat, returns timestamp as last field)
     local cmd2 = "stat -t '" .. escaped .. "' 2>/dev/null"
-    log.logMessage("getFileMtimeSeconds: Trying method 2 (POSIX stat): " .. cmd2)
     local h2 = io.popen(cmd2)
     if h2 then
         local out2 = h2:read("*all") or ""
@@ -77,7 +74,6 @@ local function getFileMtimeSeconds(path)
             local mtime2 = tonumber(fields[8]) -- mtime is 8th field
             if mtime2 then
                 if isValidTimestamp(mtime2) then
-                    log.logMessage("getFileMtimeSeconds: Success with method 2 - mtime = " .. mtime2 .. " seconds")
                     return mtime2
                 else
                     log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (POSIX stat): " .. mtime2 .. " - returning nil")
@@ -85,12 +81,10 @@ local function getFileMtimeSeconds(path)
                 end
             end
         end
-        log.logMessage("getFileMtimeSeconds: Method 2 failed, output: '" .. tostring(out2) .. "'")
     end
     
     -- Try method 3: ls -l and parse (works on most systems)
     local cmd3 = "ls -l '" .. escaped .. "' 2>/dev/null"
-    log.logMessage("getFileMtimeSeconds: Trying method 3 (ls -l): " .. cmd3)
     local h3 = io.popen(cmd3)
     if h3 then
         local out3 = h3:read("*all") or ""
@@ -100,8 +94,6 @@ local function getFileMtimeSeconds(path)
         -- Parse: skip first 5 fields (perms, links, user, group, size), then date
         local monthStr, dayStr, timeOrYear = out3:match("%S+%s+%d+%s+%S+%s+%S+%s+%d+%s+(%w+)%s+(%d+)%s+(%S+)")
         if monthStr and dayStr and timeOrYear then
-            log.logMessage("getFileMtimeSeconds: Method 3 parsed: month=" .. monthStr .. ", day=" .. dayStr .. ", timeOrYear=" .. timeOrYear)
-            
             -- Month name to number
             local monthMap = {
                 Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5, Jun = 6,
@@ -130,16 +122,12 @@ local function getFileMtimeSeconds(path)
                     year = currentYear
                     if month > currentMonth or (month == currentMonth and day > currentDay) then
                         year = currentYear - 1
-                        log.logMessage("getFileMtimeSeconds: File date appears to be last year (month=" .. month .. " > current=" .. currentMonth .. ")")
                     end
-                    
-                    log.logMessage("getFileMtimeSeconds: Parsed as recent file: " .. year .. "-" .. month .. "-" .. day .. " " .. hour .. ":" .. min)
                 else
                     -- Old file: YYYY format
                     year = tonumber(timeOrYear)
                     hour = 0
                     min = 0
-                    log.logMessage("getFileMtimeSeconds: Parsed as old file: " .. year .. "-" .. month .. "-" .. day)
                 end
                 
                 if year and month and day and hour and min then
@@ -155,7 +143,6 @@ local function getFileMtimeSeconds(path)
                     local mtime3 = os.time(timeTable)
                     if mtime3 and mtime3 > 0 then
                         if isValidTimestamp(mtime3) then
-                            log.logMessage("getFileMtimeSeconds: Success with method 3 - mtime = " .. mtime3 .. " seconds (" .. os.date("%Y-%m-%d %H:%M:%S", mtime3) .. ")")
                             return mtime3
                         else
                             log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (ls -l): " .. mtime3 .. " - returning nil")
@@ -165,17 +152,12 @@ local function getFileMtimeSeconds(path)
                         log.logMessage("getFileMtimeSeconds: os.time() failed for parsed date")
                     end
                 end
-            else
-                log.logMessage("getFileMtimeSeconds: Failed to parse month/day from: " .. monthStr .. " " .. dayStr)
             end
-        else
-            log.logMessage("getFileMtimeSeconds: Method 3 failed to match date pattern, output: '" .. tostring(out3) .. "'")
         end
     end
     
     -- Try method 4: BusyBox stat format (stat file | grep Modify, then convert with date)
     local cmd4 = "stat '" .. escaped .. "' 2>/dev/null | grep -i modify"
-    log.logMessage("getFileMtimeSeconds: Trying method 4 (BusyBox stat | grep): " .. cmd4)
     local h4 = io.popen(cmd4)
     if h4 then
         local out4 = h4:read("*all") or ""
@@ -183,10 +165,7 @@ local function getFileMtimeSeconds(path)
         -- Parse "Modify: 2026-01-28 17:05:19.123456789 +0000" or "Modify: 2026-01-28 17:05:19"
         local dateStr = out4:match("Modify:%s+(%S+%s+%S+)")
         if dateStr then
-            log.logMessage("getFileMtimeSeconds: Method 4 found date string: " .. tostring(dateStr))
-            -- Try to convert using date command (GNU date format)
             local cmd4b = "date -d '" .. dateStr .. "' +%s 2>/dev/null"
-            log.logMessage("getFileMtimeSeconds: Trying date conversion (GNU): " .. cmd4b)
             local h4b = io.popen(cmd4b)
             if h4b then
                 local out4b = h4b:read("*all") or ""
@@ -195,7 +174,6 @@ local function getFileMtimeSeconds(path)
                 local mtime4 = tonumber(out4b)
                 if mtime4 and mtime4 > 0 then
                     if isValidTimestamp(mtime4) then
-                        log.logMessage("getFileMtimeSeconds: Success with method 4 - mtime = " .. mtime4 .. " seconds")
                         return mtime4
                     else
                         log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (method 4): " .. mtime4 .. " - returning nil")
@@ -212,7 +190,6 @@ local function getFileMtimeSeconds(path)
                 local mtime4c = tonumber(out4c)
                 if mtime4c and mtime4c > 0 then
                     if isValidTimestamp(mtime4c) then
-                        log.logMessage("getFileMtimeSeconds: Success with method 4 (BusyBox date) - mtime = " .. mtime4c .. " seconds")
                         return mtime4c
                     else
                         log.logMessage("getFileMtimeSeconds: CORRUPTED timestamp detected (BusyBox date): " .. mtime4c .. " - returning nil")
@@ -221,9 +198,8 @@ local function getFileMtimeSeconds(path)
                 end
             end
         end
-        log.logMessage("getFileMtimeSeconds: Method 4 failed, output: '" .. tostring(out4) .. "'")
     end
-    log.logMessage("getFileMtimeSeconds: All methods failed for path: " .. tostring(path))
+    log.logMessage("getFileMtimeSeconds: failed for path: " .. tostring(path))
     return nil
 end
 
@@ -291,26 +267,18 @@ local function findSaveFiles()
         end
     end
 
-    log.logMessage("findSaveFiles: Searching " .. #locations .. " locations")
-    
     for idx, loc in ipairs(locations) do
-        log.logMessage("findSaveFiles: Searching location " .. idx .. ": " .. loc)
         if not dirExists(loc) then
-            log.logMessage("findSaveFiles: Location does not exist, skipping: " .. loc)
+            log.logMessage("findSaveFiles: skip (not a dir): " .. tostring(loc))
             goto continue_location
         end
 
-        -- Use find command to locate only battery save files (.sav and .srm), excluding .bak and .state files
         local cmd =
             "find " .. shellQuote(loc) ..
             " -type f \\( -name '*.sav' -o -name '*.srm' \\) ! -name '*.bak' 2>/dev/null"
-        log.logMessage("findSaveFiles: Command: " .. cmd)
-        
         local ok, err = pcall(function()
-            log.logMessage("findSaveFiles: Opening pipe for location " .. idx)
             local handle = io.popen(cmd)
             if handle then
-                log.logMessage("findSaveFiles: Pipe opened, reading lines")
                 local lineCount = 0
                 for line in handle:lines() do
                     if line and line ~= "" then
@@ -319,34 +287,20 @@ local function findSaveFiles()
                             table.insert(files, line)
                         end
                         lineCount = lineCount + 1
-                        log.logMessage("findSaveFiles: Found file " .. lineCount .. " in " .. loc .. ": " .. line)
                     end
                 end
-                log.logMessage("findSaveFiles: Read " .. lineCount .. " files from " .. loc)
-                log.logMessage("findSaveFiles: Closing handle for location " .. idx)
-                local closeOk, closeErr = pcall(function() handle:close() end)
-                if not closeOk then
-                    log.logMessage("findSaveFiles: Error closing handle: " .. tostring(closeErr))
-                else
-                    log.logMessage("findSaveFiles: Handle closed successfully")
+                pcall(function() handle:close() end)
+                if lineCount > 0 then
+                    log.logMessage("findSaveFiles: " .. loc .. " -> " .. lineCount .. " files")
                 end
-            else
-                log.logMessage("findSaveFiles: Failed to open pipe for location " .. idx)
             end
         end)
-        
         if not ok then
-            log.logMessage("findSaveFiles: CRASH searching location " .. loc .. ": " .. tostring(err))
-            log.logMessage("findSaveFiles: Stack trace: " .. debug.traceback())
-        else
-            log.logMessage("findSaveFiles: Completed search for location " .. idx .. " without errors")
+            log.logMessage("findSaveFiles: error at " .. tostring(loc) .. ": " .. tostring(err))
         end
-
         ::continue_location::
     end
-    
-    log.logMessage("findSaveFiles: Total files found: " .. #files)
-    log.logMessage("=== findSaveFiles END ===")
+    log.logMessage("findSaveFiles: total " .. #files .. " files")
     return files
 end
 

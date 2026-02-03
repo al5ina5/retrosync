@@ -46,6 +46,18 @@ local function normalizePath(path)
     return path
 end
 
+-- True if path exists and is a directory (used to only add/send matching default paths).
+local function pathExists(path)
+    if not path or path == "" then return false end
+    local escaped = path:gsub("'", "'\\''")
+    local cmd = "test -d '" .. escaped .. "' 2>/dev/null && echo 1 || echo 0"
+    local h = io.popen(cmd)
+    if not h then return false end
+    local out = h:read("*all") or ""
+    pcall(function() h:close() end)
+    return out:match("1") ~= nil
+end
+
 -- Load scan_paths.json into state.scanPathEntries. If missing/empty, seed from defaults and save.
 -- If legacy custom_paths.txt exists, merge its lines as custom entries then remove reliance on it.
 function M.load(state)
@@ -96,19 +108,31 @@ function M.load(state)
         getLog().logMessage("scan_paths.load: migrated " .. #state.scanPathEntries .. " from " .. legacyPath)
     end
 
-    -- Seed defaults if still empty
+    -- Seed defaults if still empty; only add default paths that exist on this device
     if #state.scanPathEntries == 0 then
         for _, e in ipairs(M.getDefaultPathEntries()) do
-            table.insert(state.scanPathEntries, { path = e.path, kind = "default" })
+            if pathExists(e.path) then
+                table.insert(state.scanPathEntries, { path = e.path, kind = "default" })
+            end
         end
-        getLog().logMessage("scan_paths.load: seeded " .. #state.scanPathEntries .. " default paths")
+        getLog().logMessage("scan_paths.load: seeded " .. #state.scanPathEntries .. " default paths (matching only)")
+    end
+
+    -- Prune default paths that no longer exist so dashboard and file stay accurate
+    local list = state.scanPathEntries or {}
+    for i = #list, 1, -1 do
+        local e = list[i]
+        if e and e.kind == "default" and (not e.path or not pathExists(e.path)) then
+            table.remove(list, i)
+            getLog().logMessage("scan_paths.load: pruned non-existent default path " .. tostring(e.path))
+        end
     end
 
     state.scanPathsDirty = true
     M.save(state)
 end
 
--- Write state.scanPathEntries to scan_paths.json and scan_paths_flat.txt.
+-- Write state.scanPathEntries to scan_paths.json (single source of truth; watcher reads JSON via jq).
 function M.save(state)
     local entries = state.scanPathEntries or {}
     pcall(function()
@@ -122,22 +146,24 @@ function M.save(state)
         file:close()
         getLog().logMessage("scan_paths.save: wrote " .. #entries .. " to " .. path)
     end
-
-    local flatPath = config.SCAN_PATHS_FLAT_FILE
-    local flat = io.open(flatPath, "w")
-    if flat then
-        for _, e in ipairs(entries) do
-            if e and e.path and e.path ~= "" then
-                flat:write(e.path .. "\n")
-            end
-        end
-        flat:close()
-    end
 end
 
--- Return array of { path, kind } for API/heartbeat (from state.scanPathEntries).
-function M.getScanPaths(state)
-    return state.scanPathEntries or {}
+-- Return array of { path, kind } for API/heartbeat.
+-- When forApi is true, only include default paths that exist on this device (matching only).
+function M.getScanPaths(state, forApi)
+    local entries = state.scanPathEntries or {}
+    if not forApi then return entries end
+    local out = {}
+    for _, e in ipairs(entries) do
+        if e and e.path and e.path ~= "" then
+            if e.kind == "custom" then
+                table.insert(out, { path = e.path, kind = e.kind })
+            elseif e.kind == "default" and pathExists(e.path) then
+                table.insert(out, { path = e.path, kind = e.kind })
+            end
+        end
+    end
+    return out
 end
 
 -- Return list of path strings for kind == "custom" (for UI).
@@ -186,10 +212,33 @@ function M.removePath(state, path, kind)
     return false
 end
 
+-- True if two entry lists have the same set of path+kind (order-independent).
+local function entriesEqual(a, b)
+    if not a or not b then return (not a or #a == 0) and (not b or #b == 0) end
+    if #a ~= #b then return false end
+    local set = {}
+    for _, e in ipairs(a) do
+        if e and e.path and e.kind then
+            local key = e.kind .. ":" .. e.path
+            set[key] = (set[key] or 0) + 1
+        end
+    end
+    for _, e in ipairs(b) do
+        if e and e.path and e.kind then
+            local key = e.kind .. ":" .. e.path
+            if not set[key] or set[key] == 0 then return false end
+            set[key] = set[key] - 1
+        end
+    end
+    return true
+end
+
 -- Overwrite state.scanPathEntries from server response (array of { path, kind }) and save. Clears dirty.
+-- Only writes to disk when the new list differs from current state (avoids redundant I/O and log noise).
 function M.applyFromServer(state, serverPaths)
     if not serverPaths or type(serverPaths) ~= "table" then return end
-    state.scanPathEntries = {}
+    state.scanPathEntries = state.scanPathEntries or {}
+    local newEntries = {}
     local seen = {}
     for _, e in ipairs(serverPaths) do
         if e and type(e.path) == "string" and (e.kind == "default" or e.kind == "custom") then
@@ -198,11 +247,16 @@ function M.applyFromServer(state, serverPaths)
                 local key = (e.kind or "custom") .. ":" .. p
                 if not seen[key] then
                     seen[key] = true
-                    table.insert(state.scanPathEntries, { path = p, kind = e.kind })
+                    table.insert(newEntries, { path = p, kind = e.kind })
                 end
             end
         end
     end
+    if entriesEqual(state.scanPathEntries, newEntries) then
+        state.scanPathsDirty = false
+        return
+    end
+    state.scanPathEntries = newEntries
     M.save(state)
     state.scanPathsDirty = false
     getLog().logMessage("scan_paths.applyFromServer: applied " .. #state.scanPathEntries .. " paths")

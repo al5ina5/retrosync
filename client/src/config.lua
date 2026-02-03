@@ -34,21 +34,16 @@ if love and love.filesystem and love.filesystem.getSaveDirectory then
 else
     M.DATA_DIR = M.APP_DIR .. "/data"
 end
-M.API_KEY_FILE = M.DATA_DIR .. "/api_key"
-M.DEVICE_NAME_FILE = M.DATA_DIR .. "/device_name"
-M.CODE_FILE = M.DATA_DIR .. "/code"
-M.LOG_FILE = M.DATA_DIR .. "/debug.log"
-M.SERVER_URL_FILE = M.DATA_DIR .. "/server_url"
+-- Single config file (apiKey, deviceName, code, theme, audio, etc.). Legacy marker files migrated on first run.
+M.CONFIG_FILE = M.DATA_DIR .. "/config.json"
+M.LOGS_DIR = M.DATA_DIR .. "/logs"
+M.WATCHER_DIR = M.DATA_DIR .. "/watcher"  -- watcher.pid, watcher_state.tsv, watcher.log (same base as config/logs)
+M.MAX_LOG_FILE_BYTES = 2 * 1024 * 1024  -- 2MB per day file before rotation
 M.HISTORY_FILE = M.DATA_DIR .. "/device_history.json"
--- Single source of truth for scan roots (default + custom). Synced to server on heartbeat.
+-- Single source of truth for scan roots (default + custom). Synced to server on heartbeat. Watcher reads this (jq).
 M.SCAN_PATHS_FILE = M.DATA_DIR .. "/scan_paths.json"
--- Flat list (one path per line) for watcher.sh; written whenever scan_paths.json is saved.
-M.SCAN_PATHS_FLAT_FILE = M.DATA_DIR .. "/scan_paths_flat.txt"
 -- Legacy; only used when migrating from old installs.
 M.CUSTOM_PATHS_FILE = M.DATA_DIR .. "/custom_paths.txt"
-M.NO_PATHS_DISMISSED_FILE = M.DATA_DIR .. "/no_paths_dismissed"
-M.AUDIO_PREFS_FILE = M.DATA_DIR .. "/audio_prefs"
-M.THEME_FILE = M.DATA_DIR .. "/theme"
 M.INSTALL_BG_SCRIPT = M.APP_DIR .. "/install-background-process.sh"
 M.UNINSTALL_BG_SCRIPT = M.APP_DIR .. "/uninstall-background-process.sh"
 

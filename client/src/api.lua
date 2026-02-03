@@ -30,7 +30,7 @@ function M.getCodeFromServer()
         if err then result = nil end
         if result and result.success and result.data and result.data.code then
             state.deviceCode = string.upper(result.data.code)
-            storage.saveCode(state.deviceCode)
+            storage.saveConfig(state)
             state.pairingError = ""
             log.logMessage("SUCCESS: Code saved: " .. state.deviceCode)
         else
@@ -69,8 +69,7 @@ function M.checkPairingStatus()
                 if result.data.apiKey then
                     state.apiKey = result.data.apiKey
                     state.deviceName = (result.data.device and result.data.device.name) or "Miyoo Flip"
-                    storage.saveApiKey(state.apiKey)
-                    storage.saveDeviceName(state.deviceName)
+                    storage.saveConfig(state)
                     state.currentState = config.STATE_CONNECTED
                     state.isPaired = true
                     state.pairingError = ""
@@ -99,7 +98,8 @@ function M.sendHeartbeat()
     local shouldSendPaths = state.scanPathsDirty or (state.scanPathsLastSentAt or 0) == 0 or (now - (state.scanPathsLastSentAt or 0) > 3600)
     local payload = "{}"
     if shouldSendPaths then
-        local paths = scan_paths.getScanPaths(state)
+        -- Only send default paths that exist on this device (matching only)
+        local paths = scan_paths.getScanPaths(state, true)
         payload = json.encode({ scanPaths = paths })
     end
 
@@ -110,9 +110,12 @@ function M.sendHeartbeat()
         if not err then result = parsed end
     end
 
-    if shouldSendPaths and result and result.success and result.data and result.data.scanPaths then
-        state.scanPathsLastSentAt = now
-        state.scanPathsDirty = false
+    -- Always apply server scan paths when present so dashboard removals sync to client
+    if result and result.success and result.data and result.data.scanPaths then
+        if shouldSendPaths then
+            state.scanPathsLastSentAt = now
+            state.scanPathsDirty = false
+        end
         scan_paths.applyFromServer(state, result.data.scanPaths)
     end
 end
