@@ -1,10 +1,12 @@
 -- Add DownloadEvent table for dashboard download rate limiting
 
+DROP TABLE IF EXISTS "DownloadEvent";
+
 CREATE TABLE "DownloadEvent" (
-    "id" TEXT NOT NULL,
-    "userId" TEXT NOT NULL,
-    "saveId" TEXT,
-    "saveVersionId" TEXT,
+    "id" UUID NOT NULL,
+    "userId" UUID NOT NULL,
+    "saveId" UUID,
+    "saveVersionId" UUID,
     "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     CONSTRAINT "DownloadEvent_pkey" PRIMARY KEY ("id")
