@@ -41,13 +41,6 @@ export default function Downloads() {
                         </a>
                     </div>
                     <p className="text-sm">Bundled executable with the LÖVE runtime (64-bit).</p>
-                    <p className="text-xs text-gameboy-dark">
-                        Already have LÖVE?{" "}
-                        <a className="underline" href={downloads.love}>
-                            Download the .love file
-                        </a>
-                        .
-                    </p>
                 </div>
 
                 <div className="space-y-2">
@@ -57,13 +50,15 @@ export default function Downloads() {
                         </a>
                     </div>
                     <p className="text-sm">Includes LÖVE runtime and launch script.</p>
-                    <p className="text-xs text-gameboy-dark">
-                        Prefer your own runtime?{" "}
-                        <a className="underline" href={downloads.love}>
-                            Grab the .love archive
+                </div>
+
+                <div className="space-y-2">
+                    <div>
+                        <a href={downloads.love}>
+                            <Button variant="primary">LÖVE</Button>
                         </a>
-                        .
-                    </p>
+                    </div>
+                    <p className="text-sm">Just the .love file—run with your own LÖVE 11.x.</p>
                 </div>
 
             </div>

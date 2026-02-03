@@ -82,14 +82,19 @@ export default function DownloadPage() {
               Download Linux ZIP
             </a>
           </div>
-        </div>
 
-        <div className="border-2 border-gameboy-dark p-4 mt-6">
-          <p className="text-sm">
-            <strong>Need the bare .love file?</strong>{" "}
-            <a className="underline" href={downloads.love}>Download it here</a>{" "}
-            to run with your own LÖVE 11.x installation.
-          </p>
+          <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
+            <h3 className="font-medium text-lg mb-2">LÖVE</h3>
+            <p className="text-sm text-gameboy-dark mb-3">
+              Just the .love file—run with your own LÖVE 11.x.
+            </p>
+            <a
+              href={downloads.love}
+              className="inline-block border-2 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-4 py-2 text-sm"
+            >
+              Download .love file
+            </a>
+          </div>
         </div>
       </section>
 
