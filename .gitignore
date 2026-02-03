@@ -25,7 +25,6 @@ prisma/migrations/
 .next/
 out/
 dist/
-build/
 client/build/macos/.cache/
 *.egg-info/
 
