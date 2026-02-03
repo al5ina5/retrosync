@@ -18,14 +18,8 @@ jobs:
 
       - name: Build PortMaster package
         run: |
-          if [ ! -f client/build/portmaster/build.sh ]; then
-            echo "PortMaster build script not found, skipping."
-            exit 0
-          fi
-          cd client && ./build/portmaster/build.sh
-
-      - name: Verify PortMaster output
-        run: |
+          test -f client/build/portmaster/build.sh || { echo "Missing client/build/portmaster/build.sh"; exit 1; }
+          bash client/build/portmaster/build.sh
           test -d client/dist/portmaster || { echo "Missing client/dist/portmaster"; exit 1; }
           test -f client/dist/portmaster/RetroSync/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
 
@@ -55,14 +49,8 @@ jobs:
 
       - name: Build macOS app
         run: |
-          if [ ! -f client/build/macos/build.sh ]; then
-            echo "macOS build script not found, skipping."
-            exit 0
-          fi
-          cd client && ./build/macos/build.sh
-
-      - name: Verify macOS output
-        run: |
+          test -f client/build/macos/build.sh || { echo "Missing client/build/macos/build.sh"; exit 1; }
+          bash client/build/macos/build.sh
           test -d client/dist/macos || { echo "Missing client/dist/macos"; exit 1; }
           test -f client/dist/macos/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
 
