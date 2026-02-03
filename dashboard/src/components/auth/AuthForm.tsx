@@ -1,11 +1,9 @@
 "use client";
 
 import { useState } from "react";
-import { useRouter } from "next/navigation";
 import { useAuth } from "@/hooks";
 
 export function AuthForm({ mode, setMode }: { mode: "login" | "register", setMode: (mode: "login" | "register") => void }) {
-  const router = useRouter();
   const { login, register } = useAuth({ redirectOnUnauthenticated: false });
 
   const [email, setEmail] = useState("");
@@ -20,8 +18,7 @@ export function AuthForm({ mode, setMode }: { mode: "login" | "register", setMod
     const result =
       mode === "login" ? await login(email, password) : await register(email, password);
     setSubmitting(false);
-    if (result.success) router.push("/devices");
-    else setError(result.error || "Something went wrong");
+    if (!result.success) setError(result.error || "Something went wrong");
   };
 
   const handleSwitchMode = () => {

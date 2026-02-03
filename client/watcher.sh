@@ -19,26 +19,26 @@ set -o pipefail
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 GAMEDIR="$(cd "$SCRIPT_DIR" && pwd)"
 
-# Use passed DATA_DIR (LOVE/app data dir) so watcher files live with config/logs; else default to GAMEDIR/data.
+# Use passed DATA_DIR (must match LÖVE getSaveDirectory(): saves/love/retrosync when XDG_DATA_HOME=GAMEDIR/saves).
 if [[ -n "${2:-}" ]]; then
   DATA_DIR="$2"
 else
-  DATA_DIR="$GAMEDIR/data"
+  DATA_DIR="$GAMEDIR/saves/love/retrosync"
 fi
 mkdir -p "$DATA_DIR"
 
-# Watcher runtime files go in a watcher/ subfolder under DATA_DIR (same base as app config/logs).
+# All logs go in logs/; watcher runtime (pid, state, temp files) in watcher/.
+LOGS_DIR="${DATA_DIR}/logs"
 WATCHER_DIR="${DATA_DIR}/watcher"
+mkdir -p "$LOGS_DIR"
 mkdir -p "$WATCHER_DIR"
 
 PIDFILE="$WATCHER_DIR/watcher.pid"
 STATEFILE="$WATCHER_DIR/watcher_state.tsv"
-LOGFILE="$WATCHER_DIR/watcher.log"
+LOGFILE="$LOGS_DIR/watcher.log"
 
 # App config (shared with LÖVE app; single config.json)
 CONFIG_JSON="$DATA_DIR/config.json"
-SERVER_URL_FILE="$DATA_DIR/server_url"
-
 DEFAULT_SERVER_URL="https://retrosync.vercel.app"
 
 log() {
@@ -128,13 +128,16 @@ json_escape() {
 }
 
 read_server_url() {
-  if [[ -f "$SERVER_URL_FILE" ]]; then
-    local line
-    line="$(head -n 1 "$SERVER_URL_FILE" | tr -d '\r' | sed -e 's/^[[:space:]]*//' -e 's/[[:space:]]*$//')"
-    if [[ -n "$line" ]]; then
-      # strip trailing slash
-      line="${line%/}"
-      printf '%s' "$line"
+  if [[ -f "$CONFIG_JSON" ]]; then
+    local url
+    if command -v jq >/dev/null 2>&1; then
+      url="$(jq -r '.serverUrl // empty' "$CONFIG_JSON" 2>/dev/null)"
+    else
+      url="$(tr -d '\n\r' < "$CONFIG_JSON" 2>/dev/null | grep -oE '"serverUrl"[[:space:]]*:[[:space:]]*"[^"]*"' | sed -nE 's/.*:[[:space:]]*"([^"]*)"$/\1/p' | head -n 1)"
+    fi
+    if [[ -n "$url" ]]; then
+      url="${url%/}"
+      printf '%s' "$url"
       return
     fi
   fi
@@ -293,29 +296,15 @@ upload_file() {
 
 discover_files() {
   # Output lines: path<TAB>mtime<TAB>size
-  # Roots: scan_paths.json (via jq), else legacy custom_paths.txt, else defaults.
+  # Roots: config.json .scanPaths (via jq), else defaults.
   local -a locations=()
-  if [[ -f "$DATA_DIR/scan_paths.json" ]]; then
-    if command -v jq >/dev/null 2>&1; then
-      while IFS= read -r line || [[ -n "$line" ]]; do
-        line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
-        [[ -z "$line" ]] && continue
-        [[ "$line" == *"/" ]] && line="${line%/}"
-        locations+=( "$line" )
-      done < <(jq -r '.paths[]?.path // empty' "$DATA_DIR/scan_paths.json" 2>/dev/null || true)
-    fi
-  fi
-  if [[ ${#locations[@]} -eq 0 ]] && [[ -f "$DATA_DIR/custom_paths.txt" ]]; then
-    locations=( "/mnt/sdcard/Saves/saves" "/mnt/mmc/MUOS/save/file" )
-    if [[ -n "${HOME:-}" ]]; then
-      locations+=( "$HOME/Library/Application Support/OpenEmu" )
-    fi
+  if [[ -f "$CONFIG_JSON" ]] && command -v jq >/dev/null 2>&1; then
     while IFS= read -r line || [[ -n "$line" ]]; do
       line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
       [[ -z "$line" ]] && continue
       [[ "$line" == *"/" ]] && line="${line%/}"
       locations+=( "$line" )
-    done < "$DATA_DIR/custom_paths.txt"
+    done < <(jq -r '.scanPaths[]?.path // empty' "$CONFIG_JSON" 2>/dev/null || true)
   fi
   if [[ ${#locations[@]} -eq 0 ]]; then
     locations=(

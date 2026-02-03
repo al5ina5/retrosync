@@ -86,15 +86,20 @@ sshpass -p "$MUOS_PASS" sftp $SFTP_OPTS "$MUOS_USER@$MUOS_IP" << SFTP_BATCH
 put "$DIST_DIR/$GAME_NAME.sh" "$SCRIPTS_PATH/$GAME_NAME.sh"
 put "$DIST_DIR/${GAME_NAME}Uninstaller.sh" "$SCRIPTS_PATH/${GAME_NAME}Uninstaller.sh"
 
-# Create game folder and upload contents
+# Create game folder and upload contents (LÖVE data dir from shared vars)
+source "$SCRIPT_DIR/../shared/vars.sh"
+DATA_SUBDIR="$RETROSYNC_LOVE_DATA_SUBDIR"
 -mkdir "$PORTS_PATH/$GAME_NAME"
 -mkdir "$PORTS_PATH/$GAME_NAME/autostart"
+-mkdir "$PORTS_PATH/$GAME_NAME/saves"
+-mkdir "$PORTS_PATH/$GAME_NAME/saves/love"
+-mkdir "$PORTS_PATH/$GAME_NAME/$DATA_SUBDIR"
 
 # Upload main files
 put "$DIST_DIR/$GAME_NAME/RetroSync.love" "$PORTS_PATH/$GAME_NAME/RetroSync.love"
+put "$DIST_DIR/$GAME_NAME/$DATA_SUBDIR/config.json" "$PORTS_PATH/$GAME_NAME/$DATA_SUBDIR/config.json"
 put "$DIST_DIR/$GAME_NAME/RetroSync.gptk" "$PORTS_PATH/$GAME_NAME/RetroSync.gptk"
 put "$DIST_DIR/$GAME_NAME/watcher.sh" "$PORTS_PATH/$GAME_NAME/watcher.sh"
-put "$DIST_DIR/$GAME_NAME/install-initd.sh" "$PORTS_PATH/$GAME_NAME/install-initd.sh"
 put "$DIST_DIR/$GAME_NAME/port.json" "$PORTS_PATH/$GAME_NAME/port.json"
 
 # Upload autostart scripts

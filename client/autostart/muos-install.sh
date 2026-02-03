@@ -3,8 +3,9 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="${2:-$APPDIR/data}"
-SIDECAR="$DATA_DIR/autostart_muos.txt"
+# Must match LÖVE getSaveDirectory(): saves/love/retrosync when XDG_DATA_HOME=GAMEDIR/saves (identity from conf.lua).
+DATA_DIR="${2:-$APPDIR/saves/love/retrosync}"
+CONFIG_JSON="$DATA_DIR/config.json"
 
 # Log to RetroSync log.txt so we can see what's happening
 INSTALL_LOG="$APPDIR/log.txt"
@@ -130,10 +131,11 @@ if [ ! -d "\$RETROSYNC_DIR" ]; then
 fi
 
 WATCHER="\$RETROSYNC_DIR/watcher.sh"
-DATA_DIR="\$RETROSYNC_DIR/data"
+DATA_DIR="\$RETROSYNC_DIR/saves/love/retrosync"
 WATCHER_LOG="\$DATA_DIR/muos_autostart.log"
 
 echo "RetroSync directory: \$RETROSYNC_DIR" >> "\$INIT_LOG" 2>&1
+echo "Data dir (LÖVE getSaveDirectory): \$DATA_DIR" >> "\$INIT_LOG" 2>&1
 echo "Watcher path: \$WATCHER" >> "\$INIT_LOG" 2>&1
 
 mkdir -p "\$DATA_DIR" 2>/dev/null
@@ -170,7 +172,7 @@ if pgrep -f "\$WATCHER" >/dev/null 2>&1; then
 fi
 
 echo "Starting watcher..." >> "\$INIT_LOG" 2>&1
-nohup "\$WATCHER" >>"\$WATCHER_LOG" 2>&1 &
+nohup "\$WATCHER" "\$RETROSYNC_DIR" "\$DATA_DIR" >>"\$WATCHER_LOG" 2>&1 &
 WATCHER_PID=\$!
 echo "  Watcher launched with PID: \$WATCHER_PID" >> "\$INIT_LOG" 2>&1
 sleep 1
@@ -220,7 +222,20 @@ else
   echo "[muos-install] ERROR: $RETRO_INIT exists but is NOT executable - muOS will not run it!" >> "$INSTALL_LOG" 2>&1
 fi
 
-echo "1" > "$SIDECAR"
+# Mark autostart in config.json (single source of truth).
+# If jq is missing, write a sidecar to avoid clobbering an existing config.
+if command -v jq >/dev/null 2>&1; then
+  if [ -f "$CONFIG_JSON" ]; then
+    jq '.autostart = "muos"' "$CONFIG_JSON" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON"
+  else
+    printf '%s\n' '{"autostart":"muos"}' > "$CONFIG_JSON"
+  fi
+else
+  if [ -f "$CONFIG_JSON" ]; then
+    printf '%s\n' "1" > "$DATA_DIR/autostart_muos.txt"
+  else
+    printf '%s\n' '{"autostart":"muos"}' > "$CONFIG_JSON"
+  fi
+fi
 echo "[muos-install] RetroSync muOS autostart installed (script: $RETRO_INIT)." >> "$INSTALL_LOG" 2>&1
 echo "RetroSync muOS autostart installed (script: $RETRO_INIT)."
-

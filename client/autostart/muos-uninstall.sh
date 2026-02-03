@@ -3,8 +3,8 @@
 set -u
 
 APPDIR="${1:-$(cd "$(dirname "$0")/.." && pwd)}"
-DATA_DIR="${2:-$APPDIR/data}"
-SIDECAR="$DATA_DIR/autostart_muos.txt"
+DATA_DIR="${2:-$APPDIR/saves/love/retrosync}"
+CONFIG_JSON="$DATA_DIR/config.json"
 
 # Detect MUOS init directory (check both cards)
 INIT_DIR=""
@@ -75,7 +75,7 @@ done
 
 if [ -n "$RETROSYNC_DIR" ]; then
   WATCHER="$RETROSYNC_DIR/watcher.sh"
-  WATCHER_DATA_DIR="$RETROSYNC_DIR/data"
+  WATCHER_DATA_DIR="$RETROSYNC_DIR/saves/love/retrosync"
   PIDFILE="$WATCHER_DATA_DIR/watcher/watcher.pid"
   
   # Stop watcher via PID file
@@ -94,8 +94,12 @@ if [ -n "$RETROSYNC_DIR" ]; then
   fi
 fi
 
-# Tell app autostart is disabled (Lua merges into config.json)
-echo "0" > "$SIDECAR"
+# Mark autostart disabled in config.json (single source of truth)
+if command -v jq >/dev/null 2>&1 && [ -f "$CONFIG_JSON" ]; then
+  jq '.autostart = false' "$CONFIG_JSON" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON"
+else
+  [ -f "$CONFIG_JSON" ] && printf '%s' "$(sed 's/"autostart"[[:space:]]*:[[:space:]]*"muos"/"autostart":false/' "$CONFIG_JSON")" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON" 2>/dev/null || true
+fi
 
 echo "RetroSync muOS autostart integration uninstalled."
 

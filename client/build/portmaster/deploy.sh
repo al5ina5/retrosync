@@ -33,17 +33,17 @@ if ! sshpass -p "$SPRUCE_PASS" ssh -o ConnectTimeout=5 -o StrictHostKeyChecking=
 fi
 echo "Connected!"
 
-# Clean old files first, but preserve data folder
-echo "Cleaning old files (preserving data folder)..."
+# Clean old files first, but preserve saves folder (LÖVE data = getSaveDirectory())
+echo "Cleaning old files (preserving saves folder)..."
 sshpass -p "$SPRUCE_PASS" ssh -o StrictHostKeyChecking=no "$SPRUCE_USER@$SPRUCE_IP" \
     "if [ -d '$SPRUCE_PATH/$GAME_NAME' ]; then \
-        if [ -d '$SPRUCE_PATH/$GAME_NAME/data' ]; then \
-            mkdir -p /tmp/retrosync_data_backup && \
-            cp -r '$SPRUCE_PATH/$GAME_NAME/data' /tmp/retrosync_data_backup/ && \
+        if [ -d '$SPRUCE_PATH/$GAME_NAME/saves' ]; then \
+            mkdir -p /tmp/retrosync_saves_backup && \
+            cp -r '$SPRUCE_PATH/$GAME_NAME/saves' /tmp/retrosync_saves_backup/ && \
             rm -rf '$SPRUCE_PATH/$GAME_NAME' '$SPRUCE_PATH/$GAME_NAME.sh' '$SPRUCE_PATH/${GAME_NAME}Uninstaller.sh' && \
             mkdir -p '$SPRUCE_PATH/$GAME_NAME' && \
-            mv /tmp/retrosync_data_backup/data '$SPRUCE_PATH/$GAME_NAME/' && \
-            rm -rf /tmp/retrosync_data_backup; \
+            mv /tmp/retrosync_saves_backup/saves '$SPRUCE_PATH/$GAME_NAME/' && \
+            rm -rf /tmp/retrosync_saves_backup; \
         else \
             rm -rf '$SPRUCE_PATH/$GAME_NAME' '$SPRUCE_PATH/$GAME_NAME.sh' '$SPRUCE_PATH/${GAME_NAME}Uninstaller.sh'; \
         fi; \
@@ -60,12 +60,15 @@ sshpass -p "$SPRUCE_PASS" scp -r \
   "$SPRUCE_USER@$SPRUCE_IP:$SPRUCE_PATH/"
 
 if [ $? -eq 0 ]; then
-    # Optionally set production server URL on device (used by client to talk to dashboard API)
+    # Optionally set production server URL in config.json (shared vars for LÖVE data dir)
+    source "$SCRIPT_DIR/../shared/vars.sh"
     if [ -n "$RETROSYNC_SERVER_URL" ]; then
         echo ""
-        echo "Setting server URL on device to: $RETROSYNC_SERVER_URL"
+        echo "Setting server URL in config.json on device to: $RETROSYNC_SERVER_URL"
+        URL="${RETROSYNC_SERVER_URL%/}"
+        CONFIG_DIR="$SPRUCE_PATH/$GAME_NAME/$RETROSYNC_LOVE_DATA_SUBDIR"
         sshpass -p "$SPRUCE_PASS" ssh -o StrictHostKeyChecking=no "$SPRUCE_USER@$SPRUCE_IP" \
-            "mkdir -p '$SPRUCE_PATH/$GAME_NAME/data' && echo '$RETROSYNC_SERVER_URL' > '$SPRUCE_PATH/$GAME_NAME/data/server_url'"
+            "mkdir -p '$CONFIG_DIR'; if [ -f '$CONFIG_DIR/config.json' ] && command -v jq >/dev/null 2>&1; then jq -c --arg u '${URL}' '.serverUrl = \$u' '$CONFIG_DIR/config.json' > '$CONFIG_DIR/config.json.tmp' && mv '$CONFIG_DIR/config.json.tmp' '$CONFIG_DIR/config.json'; else printf '%s' '{\"serverUrl\":\"${URL}\",\"autostart\":false}' > '$CONFIG_DIR/config.json'; fi"
     fi
 
     echo ""

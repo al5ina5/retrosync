@@ -1,14 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useDevices } from "@/hooks";
+import { UpgradeLimitModal } from "@/components/upgrade";
+import { isUpgradeLimitError } from "@/lib/upgradeLimit";
+
+const FREE_MAX_DEVICES = 2;
 
 export function DevicePairForm() {
-  const { pairDevice, isPairing, pairingError, pairingSuccess } = useDevices();
+  const { devices, pairDevice, isPairing, pairingError, pairingSuccess } = useDevices();
   const [code, setCode] = useState("");
+  const [upgradeModalOpen, setUpgradeModalOpen] = useState(false);
+  const [upgradeMessage, setUpgradeMessage] = useState<string | null>(null);
+  const isLimitError = isUpgradeLimitError(pairingError);
+  const isAtDeviceLimit = devices.length >= FREE_MAX_DEVICES;
+
+  useEffect(() => {
+    if (isLimitError) {
+      setUpgradeMessage(pairingError);
+      setUpgradeModalOpen(true);
+    }
+  }, [isLimitError, pairingError]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (isAtDeviceLimit) {
+      setUpgradeMessage(
+        `Free plan allows up to ${FREE_MAX_DEVICES} devices. Upgrade to add more.`
+      );
+      setUpgradeModalOpen(true);
+      return;
+    }
     const success = await pairDevice(code);
     if (success) setCode("");
   };
@@ -30,8 +52,15 @@ export function DevicePairForm() {
           </button>
         </div>
       </form>
-      {pairingError && <p className="p-2 text-sm text-red-600">{pairingError}</p>}
+      {pairingError && !isLimitError && (
+        <p className="p-2 text-sm text-red-600">{pairingError}</p>
+      )}
       {pairingSuccess && <p className="p-2 text-sm text-green-700">Device paired!</p>}
+      <UpgradeLimitModal
+        open={upgradeModalOpen}
+        onClose={() => setUpgradeModalOpen(false)}
+        errorMessage={upgradeMessage ?? pairingError}
+      />
     </div>
   );
 }

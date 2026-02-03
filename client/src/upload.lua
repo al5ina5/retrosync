@@ -60,13 +60,13 @@ local function uploadSave(filepath)
     end
 
     pcall(function()
-        os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
+        os.execute("mkdir -p '" .. config.WATCHER_DIR:gsub("'", "'\\''") .. "' 2>/dev/null")
     end)
 
     local base64Content = nil
     local base64Ok, base64Err = pcall(function()
-        -- Use unsanitized path for io.open so DATA_DIR with spaces (e.g. "Application Support") works.
-        local tempFile = config.DATA_DIR .. "/temp_upload_" .. os.time() .. "_" .. math.random(10000) .. ".bin"
+        -- Temp files in watcher/ so data dir has only config.json, logs/, watcher/.
+        local tempFile = config.WATCHER_DIR .. "/temp_upload_" .. os.time() .. "_" .. math.random(10000) .. ".bin"
         local tempF = io.open(tempFile, "wb")
         if not tempF then
             log.logMessage("uploadSave: Base64 temp file open failed: " .. tostring(tempFile))

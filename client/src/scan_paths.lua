@@ -58,12 +58,25 @@ local function pathExists(path)
     return out:match("1") ~= nil
 end
 
--- Load scan_paths.json into state.scanPathEntries. If missing/empty, seed from defaults and save.
--- If legacy custom_paths.txt exists, merge its lines as custom entries then remove reliance on it.
+-- Load scan paths from config.json (data.scanPaths). If missing/empty, migrate from legacy files and seed.
 function M.load(state)
     state.scanPathEntries = state.scanPathEntries or {}
-    local path = config.SCAN_PATHS_FILE
-    local file = io.open(path, "r")
+    -- If storage.loadConfig already set scanPathEntries from config.json, only prune and maybe save
+    if #state.scanPathEntries > 0 then
+        local list = state.scanPathEntries
+        for i = #list, 1, -1 do
+            local e = list[i]
+            if e and e.kind == "default" and (not e.path or not pathExists(e.path)) then
+                table.remove(list, i)
+                getLog().logMessage("scan_paths.load: pruned non-existent default path " .. tostring(e.path))
+            end
+        end
+        return
+    end
+
+    -- Try legacy scan_paths.json and custom_paths.txt (storage may have already migrated; check files)
+    local scanPath = config.DATA_DIR .. "/scan_paths.json"
+    local file = io.open(scanPath, "r")
     if file then
         local raw = file:read("*a")
         file:close()
@@ -83,29 +96,22 @@ function M.load(state)
                         end
                     end
                 end
-                if #state.scanPathEntries > 0 then
-                    getLog().logMessage("scan_paths.load: loaded " .. #state.scanPathEntries .. " from " .. path)
-                    return
-                end
+                pcall(function() os.remove(scanPath) end)
             end
         end
     end
-
-    -- Migrate from legacy custom_paths.txt
-    local legacyPath = config.CUSTOM_PATHS_FILE
-    local legacy = io.open(legacyPath, "r")
+    local customPath = config.DATA_DIR .. "/custom_paths.txt"
+    local legacy = io.open(customPath, "r")
     if legacy then
         for line in legacy:lines() do
             line = line and line:match("^%s*(.-)%s*$") or ""
             if line ~= "" then
                 local p = normalizePath(line)
-                if p then
-                    table.insert(state.scanPathEntries, { path = p, kind = "custom" })
-                end
+                if p then table.insert(state.scanPathEntries, { path = p, kind = "custom" }) end
             end
         end
         legacy:close()
-        getLog().logMessage("scan_paths.load: migrated " .. #state.scanPathEntries .. " from " .. legacyPath)
+        pcall(function() os.remove(customPath) end)
     end
 
     -- Seed defaults if still empty; only add default paths that exist on this device
@@ -118,7 +124,7 @@ function M.load(state)
         getLog().logMessage("scan_paths.load: seeded " .. #state.scanPathEntries .. " default paths (matching only)")
     end
 
-    -- Prune default paths that no longer exist so dashboard and file stay accurate
+    -- Prune default paths that no longer exist
     local list = state.scanPathEntries or {}
     for i = #list, 1, -1 do
         local e = list[i]
@@ -132,20 +138,11 @@ function M.load(state)
     M.save(state)
 end
 
--- Write state.scanPathEntries to scan_paths.json (single source of truth; watcher reads JSON via jq).
+-- Write state.scanPathEntries to config.json via storage (single source of truth; watcher reads config.json).
 function M.save(state)
-    local entries = state.scanPathEntries or {}
-    pcall(function()
-        os.execute("mkdir -p '" .. config.DATA_DIR:gsub("'", "'\\''") .. "' 2>/dev/null")
-    end)
-
-    local path = config.SCAN_PATHS_FILE
-    local file = io.open(path, "w")
-    if file then
-        file:write(json.encode({ paths = entries }))
-        file:close()
-        getLog().logMessage("scan_paths.save: wrote " .. #entries .. " to " .. path)
-    end
+    local storage = require("src.storage")
+    storage.saveConfig(state)
+    getLog().logMessage("scan_paths.save: wrote " .. #(state.scanPathEntries or {}) .. " to config.json")
 end
 
 -- Return array of { path, kind } for API/heartbeat.

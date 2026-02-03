@@ -68,92 +68,15 @@ for script in "$CLIENT_DIR"/autostart/*.sh; do
   fi
 done
 
-# When building for release (e.g. CI sets RETROSYNC_SERVER_URL), bake production server URL
-# so the client uses the correct API without relying on config default or env on device.
+# Seed config.json in LÖVE save dir (shared script; same structure on all builds).
+source "$SCRIPT_DIR/../shared/vars.sh"
+LOVE_DATA_SUBDIR="$RETROSYNC_LOVE_DATA_SUBDIR"
+bash "$SCRIPT_DIR/../shared/write_config_json.sh" "$BUILD_DIR/$GAME_NAME/$LOVE_DATA_SUBDIR" "${RETROSYNC_SERVER_URL:-}"
 if [ -n "${RETROSYNC_SERVER_URL:-}" ]; then
-  mkdir -p "$BUILD_DIR/$GAME_NAME/data"
-  printf '%s' "$RETROSYNC_SERVER_URL" | sed 's|/$||' > "$BUILD_DIR/$GAME_NAME/data/server_url"
-  echo "  ✓ Baked server URL for release"
+  echo "  ✓ Baked server URL into config.json for release"
+else
+  echo "  ✓ Seeded default config.json"
 fi
-
-cat > "$BUILD_DIR/$GAME_NAME/install-initd.sh" << 'INITD_EOF'
-#!/bin/bash
-set -euo pipefail
-
-# Optional: install RetroSync watcher as an init.d service (boot persistence)
-# This is firmware-specific; it only works if the OS runs /etc/init.d scripts at boot.
-#
-# Usage (on device, as root):
-#   cd /path/to/RetroSync
-#   ./install-initd.sh
-#
-# Uninstall:
-#   rm -f /etc/init.d/retrosync-watcher
-
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-GAMEDIR="$(cd "$SCRIPT_DIR" && pwd)"
-
-TARGET_BASE="/etc/init.d/retrosync-watcher"
-TARGET_RC="/etc/init.d/S99retrosync-watcher"
-
-cat > "$TARGET_BASE" << EOF
-#!/bin/sh
-### BEGIN INIT INFO
-# Provides:          retrosync-watcher
-# Required-Start:    \$remote_fs \$network
-# Required-Stop:     \$remote_fs \$network
-# Default-Start:     2 3 4 5
-# Default-Stop:      0 1 6
-# Short-Description: RetroSync save watcher
-### END INIT INFO
-
-DAEMON="$GAMEDIR/watcher.sh"
-PIDFILE="$GAMEDIR/data/watcher/watcher.pid"
-
-start() {
-  if [ -f "\$PIDFILE" ] && kill -0 \$(cat "\$PIDFILE" 2>/dev/null) 2>/dev/null; then
-    echo "retrosync-watcher already running"
-    return 0
-  fi
-  # Detach completely
-  nohup setsid "\$DAEMON" >/dev/null 2>&1 &
-  echo "retrosync-watcher started"
-}
-
-stop() {
-  if [ -f "\$PIDFILE" ]; then
-    PID=\$(cat "\$PIDFILE" 2>/dev/null)
-    if [ -n "\$PID" ]; then
-      kill "\$PID" 2>/dev/null || true
-    fi
-    rm -f "\$PIDFILE"
-  fi
-  echo "retrosync-watcher stopped"
-}
-
-case "\$1" in
-  start) start ;;
-  stop) stop ;;
-  restart) stop; start ;;
-  *) echo "Usage: \$0 {start|stop|restart}"; exit 1 ;;
-esac
-EOF
-
-chmod +x "$TARGET_BASE"
-
-# Many BusyBox/init.d setups run all /etc/init.d/S??* scripts at boot.
-# Create/refresh an S99 symlink so the watcher starts automatically.
-if [ -e "$TARGET_RC" ] || [ -L "$TARGET_RC" ]; then
-  rm -f "$TARGET_RC"
-fi
-ln -s "$TARGET_BASE" "$TARGET_RC"
-
-echo "Installed: $TARGET_BASE"
-echo "Created symlink: $TARGET_RC"
-echo "Now try: $TARGET_BASE start"
-INITD_EOF
-
-chmod +x "$BUILD_DIR/$GAME_NAME/install-initd.sh"
 
 # 4. Create the Launcher (.sh)
 echo "[4/6] Creating launcher script..."
@@ -191,33 +114,32 @@ fi
 
 cd "$GAMEDIR"
 
-# Setup saves path
+# LÖVE data dir = getSaveDirectory() when XDG_DATA_HOME=GAMEDIR/saves (identity "retrosync" from conf.lua).
 export XDG_DATA_HOME="$GAMEDIR/saves"
 export XDG_CONFIG_HOME="$GAMEDIR/saves"
+DATA_DIR="$GAMEDIR/saves/love/retrosync"
 mkdir -p "$XDG_DATA_HOME"
-mkdir -p "$XDG_CONFIG_HOME"
+mkdir -p "$DATA_DIR"
 
 # Redirect all output to log.txt for debugging
 exec > >(tee "$GAMEDIR/log.txt") 2>&1
 echo "--- Starting RetroSync ---"
 echo "Date: $(date)"
 echo "GAMEDIR: $GAMEDIR"
+echo "DATA_DIR: $DATA_DIR"
 echo "Device: $DEVICE_NAME ($DEVICE_ARCH)"
 
 # Auto-install spruceOS autostart integration (one-time, silent if fails)
 SPRUCENET="/mnt/SDCARD/spruce/scripts/networkservices.sh"
 SPRUCER_INSTALLER="$GAMEDIR/autostart/spruce-install.sh"
 if [ -f "$SPRUCENET" ] && [ -x "$SPRUCER_INSTALLER" ]; then
-    mkdir -p "$GAMEDIR/data" 2>/dev/null || true
     SPRUCE_ALREADY=false
-    if [ -f "$GAMEDIR/data/config.json" ] && command -v jq >/dev/null 2>&1; then
-        jq -e '.autostart == "spruceos"' "$GAMEDIR/data/config.json" >/dev/null 2>&1 && SPRUCE_ALREADY=true
+    if [ -f "$DATA_DIR/config.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -e '.autostart == "spruceos"' "$DATA_DIR/config.json" >/dev/null 2>&1 && SPRUCE_ALREADY=true
     fi
-    [ -f "$GAMEDIR/data/spruce_autostart_installed" ] && SPRUCE_ALREADY=true
-    [ -f "$GAMEDIR/data/autostart_spruce.txt" ] && [ "$(cat "$GAMEDIR/data/autostart_spruce.txt" 2>/dev/null)" = "1" ] && SPRUCE_ALREADY=true
     if [ "$SPRUCE_ALREADY" = false ]; then
         echo "Detected spruceOS, installing RetroSync autostart integration..."
-        "$SPRUCER_INSTALLER" "$GAMEDIR" "$GAMEDIR/data" >/dev/null 2>&1 || true
+        "$SPRUCER_INSTALLER" "$GAMEDIR" "$DATA_DIR" >/dev/null 2>&1 || true
         echo "RetroSync autostart install attempted for spruceOS (see log if needed)"
     fi
 fi
@@ -225,17 +147,14 @@ fi
 # Auto-install muOS autostart integration via MUOS/init (one-time, silent if fails)
 MUOS_INSTALLER="$GAMEDIR/autostart/muos-install.sh"
 if [ -x "$MUOS_INSTALLER" ]; then
-    mkdir -p "$GAMEDIR/data" 2>/dev/null || true
     MUOS_ALREADY=false
-    if [ -f "$GAMEDIR/data/config.json" ] && command -v jq >/dev/null 2>&1; then
-        jq -e '.autostart == "muos"' "$GAMEDIR/data/config.json" >/dev/null 2>&1 && MUOS_ALREADY=true
+    if [ -f "$DATA_DIR/config.json" ] && command -v jq >/dev/null 2>&1; then
+        jq -e '.autostart == "muos"' "$DATA_DIR/config.json" >/dev/null 2>&1 && MUOS_ALREADY=true
     fi
-    [ -f "$GAMEDIR/data/muos_autostart_installed" ] && MUOS_ALREADY=true
-    [ -f "$GAMEDIR/data/autostart_muos.txt" ] && [ "$(cat "$GAMEDIR/data/autostart_muos.txt" 2>/dev/null)" = "1" ] && MUOS_ALREADY=true
     if [ "$MUOS_ALREADY" = false ]; then
         if [ -d "/mnt/mmc/MUOS/init" ] || [ -d "/mnt/sdcard/MUOS/init" ]; then
             echo "Detected muOS, installing RetroSync muOS init integration..."
-            "$MUOS_INSTALLER" "$GAMEDIR" "$GAMEDIR/data" >> "$GAMEDIR/log.txt" 2>&1 || true
+            "$MUOS_INSTALLER" "$GAMEDIR" "$DATA_DIR" >> "$GAMEDIR/log.txt" 2>&1 || true
             echo "RetroSync muOS autostart install attempted (remember to enable User Init Scripts in muOS settings; check log.txt for details)"
         else
             echo "muOS detected but MUOS/init directory not found on either card"
@@ -245,16 +164,15 @@ else
     echo "muOS installer not found or not executable at $MUOS_INSTALLER"
 fi
 
-# Start background watcher daemon (if present)
+# Start background watcher daemon (uses same DATA_DIR as LÖVE app: config, logs, watcher state)
 WATCHER="$GAMEDIR/watcher.sh"
-WATCHER_PIDFILE="$GAMEDIR/data/watcher/watcher.pid"
-mkdir -p "$GAMEDIR/data" 2>/dev/null || true
+WATCHER_PIDFILE="$DATA_DIR/watcher/watcher.pid"
 if [ -x "$WATCHER" ]; then
     if [ -f "$WATCHER_PIDFILE" ] && kill -0 "$(cat "$WATCHER_PIDFILE" 2>/dev/null)" 2>/dev/null; then
         echo "Watcher already running (pid $(cat "$WATCHER_PIDFILE" 2>/dev/null))"
     else
         echo "Starting watcher daemon..."
-        nohup setsid "$WATCHER" >/dev/null 2>&1 &
+        nohup setsid "$WATCHER" "$GAMEDIR" "$DATA_DIR" >/dev/null 2>&1 &
         sleep 0.1
         if [ -f "$WATCHER_PIDFILE" ]; then
             echo "Watcher started (pid $(cat "$WATCHER_PIDFILE" 2>/dev/null))"
@@ -393,7 +311,7 @@ echo "    - autostart/spruce-install.sh"
 echo "    - autostart/spruce-uninstall.sh"
 echo "    - autostart/muos-install.sh"
 echo "    - autostart/muos-uninstall.sh"
-echo "    - install-initd.sh"
+echo "    - saves/love/retrosync/config.json (LÖVE data dir = getSaveDirectory())"
 echo "    - port.json"
 echo ""
 echo "To deploy, run: ./deploy.sh"

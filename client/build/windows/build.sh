@@ -157,10 +157,12 @@ fi
 
 cp "$LOVE_FILE" "$PACKAGE_DIR/RetroSync.love"
 
+# Seed config.json (shared script; same structure on all builds)
+bash "$SCRIPT_DIR/../shared/write_config_json.sh" "$PACKAGE_DIR/data" "${SERVER_URL:-}"
 if [[ -n "$SERVER_URL" ]]; then
-  mkdir -p "$PACKAGE_DIR/data"
-  printf '%s' "$SERVER_URL" > "$PACKAGE_DIR/data/server_url"
-  echo "  Baked server URL into data/server_url"
+  echo "  Baked server URL into data/config.json"
+else
+  echo "  Seeded default data/config.json"
 fi
 
 cat > "$PACKAGE_DIR/README.txt" <<'EOF'

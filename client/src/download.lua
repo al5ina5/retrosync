@@ -41,7 +41,7 @@ local function downloadOne(saveVersionId, outPath, mtimeSec)
         os.execute("cp '" .. escapedOutPath .. "' '" .. escapedBakPath .. "' 2>/dev/null")
     end
 
-    local tmpfile = config.DATA_DIR .. "/tmp_download_" .. os.time() .. "_" .. math.random(10000) .. ".bin"
+    local tmpfile = config.WATCHER_DIR .. "/tmp_download_" .. os.time() .. "_" .. math.random(10000) .. ".bin"
     tmpfile = tmpfile:gsub("[^%w/%.%-_]", "_")
 
     local url = state.serverUrl .. "/api/sync/download?saveVersionId=" .. tostring(saveVersionId)

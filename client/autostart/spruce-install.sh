@@ -101,7 +101,8 @@ if ! grep -q 'RetroSync watcher check' "$NETWORK_SVC"; then
  # RetroSync watcher check\n if [ -x /mnt/SDCARD/Roms/PORTS/RetroSync/watcher.sh ]; then\n  if ! pgrep -f "/mnt/SDCARD/Roms/PORTS/RetroSync/watcher.sh" >/dev/null 2>&1; then\n   log_message "Network services: RetroSync watcher not running, starting..."\n   start_retrosync_process\n  fi\n fi\n' "$NETWORK_SVC"
 fi
 
-# Mark autostart in config.json (single source of truth)
+# Mark autostart in config.json (single source of truth).
+# If jq is missing, write a sidecar to avoid clobbering an existing config.
 if command -v jq >/dev/null 2>&1; then
   if [ -f "$CONFIG_JSON" ]; then
     jq '.autostart = "spruceos"' "$CONFIG_JSON" > "$CONFIG_JSON.tmp" && mv "$CONFIG_JSON.tmp" "$CONFIG_JSON"
@@ -109,6 +110,10 @@ if command -v jq >/dev/null 2>&1; then
     printf '%s\n' '{"autostart":"spruceos"}' > "$CONFIG_JSON"
   fi
 else
-  printf '%s\n' '{"autostart":"spruceos"}' > "$CONFIG_JSON"
+  if [ -f "$CONFIG_JSON" ]; then
+    printf '%s\n' "1" > "$DATA_DIR/autostart_spruce.txt"
+  else
+    printf '%s\n' '{"autostart":"spruceos"}' > "$CONFIG_JSON"
+  fi
 fi
 echo "RetroSync spruce autostart installed."

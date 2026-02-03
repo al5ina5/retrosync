@@ -1,7 +1,7 @@
 import { AppNav } from "../AppNav";
 import { GameboyFilter } from "./GameboyFilter";
 
-export default function AppWrapper({ children, disabled = false }: { children: React.ReactNode, disabled?: boolean }) {
+export default function AppWrapper({ children, disabled = true }: { children: React.ReactNode, disabled?: boolean }) {
     if (disabled) return children
     return (
         <div className="flex">

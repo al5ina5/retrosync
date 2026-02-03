@@ -37,12 +37,12 @@ local function shell_quote(path)
 end
 
 function M.httpPost(url, data, headers)
-    local tmpfile = config.DATA_DIR .. "/http_resp.txt"
-    local postfile = config.DATA_DIR .. "/http_post.txt"
-    local errfile = config.DATA_DIR .. "/http_err.txt"
+    local tmpfile = config.WATCHER_DIR .. "/http_resp.txt"
+    local postfile = config.WATCHER_DIR .. "/http_post.txt"
+    local errfile = config.WATCHER_DIR .. "/http_err.txt"
 
     pcall(function()
-        os.execute("mkdir -p " .. shell_quote(config.DATA_DIR) .. " 2>/dev/null")
+        os.execute("mkdir -p " .. shell_quote(config.WATCHER_DIR) .. " 2>/dev/null")
     end)
 
     log.logMessage("httpPost: " .. url)
@@ -70,7 +70,7 @@ function M.httpPost(url, data, headers)
     end
 
     local escapedUrl = url:gsub("'", "'\\''")
-    local exitCodeFile = config.DATA_DIR .. "/curl_exit.txt"
+    local exitCodeFile = config.WATCHER_DIR .. "/curl_exit.txt"
     local cmd = "curl -s -m " .. timeout .. " -X POST " .. headerStr .. " -d @" .. shell_quote(postfile) .. " " .. shell_quote(url) .. " > " .. shell_quote(tmpfile) .. " 2> " .. shell_quote(errfile) .. "; echo $? > " .. shell_quote(exitCodeFile)
     local ok, err = pcall(function()
         return os.execute(cmd)

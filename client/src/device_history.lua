@@ -1,6 +1,6 @@
 -- src/device_history.lua
--- Device-local sync history (this device only). Load, save, add entry.
--- Depends: config, state, json
+-- Device-local sync history (this device only). Load/save via config.json (storage.saveConfig).
+-- Depends: config, state, json, storage (for save)
 
 local config = require("src.config")
 local json = require("lib.dkjson")
@@ -15,39 +15,29 @@ local function save(state)
         table.insert(trimmed, entry)
     end
     state.deviceHistory = trimmed
-
-    local ok, encoded = pcall(function()
-        return json.encode(state.deviceHistory)
-    end)
-    if not ok or not encoded then
-        return
-    end
-    local file = io.open(config.HISTORY_FILE, "w")
-    if file then
-        file:write(encoded)
-        file:close()
-    end
+    local storage = require("src.storage")
+    storage.saveConfig(state)
 end
 
 function M.load(state)
-    state.deviceHistory = {}
-    local file = io.open(config.HISTORY_FILE, "r")
-    if not file then
-        return
-    end
-    local content = file:read("*all")
-    file:close()
-    if not content or content == "" then
-        return
-    end
-
-    local ok, data = pcall(function()
-        return json.decode(content)
-    end)
-    if ok and type(data) == "table" then
-        state.deviceHistory = data
-    else
-        state.deviceHistory = {}
+    state.deviceHistory = state.deviceHistory or {}
+    -- One-time migration: if empty, try legacy device_history.json (storage.loadConfig may have already migrated)
+    if #state.deviceHistory == 0 then
+        local path = config.DATA_DIR .. "/device_history.json"
+        local file = io.open(path, "r")
+        if file then
+            local content = file:read("*a")
+            file:close()
+            if content and content ~= "" then
+                local ok, data = pcall(json.decode, content)
+                if ok and type(data) == "table" then
+                    state.deviceHistory = data
+                    local storage = require("src.storage")
+                    storage.saveConfig(state)
+                end
+            end
+            pcall(function() os.remove(path) end)
+        end
     end
 end
 

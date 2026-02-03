@@ -140,12 +140,11 @@ cp -R "$LOVE_APP_PATH" "$APP_PATH"
 cp "$LOVE_FILE" "$APP_PATH/Contents/Resources/"
 echo "Created $APP_PATH (fused with ${APP_NAME}.love)"
 
-# Optionally bake server URL into app resources (read by client via DATA_DIR/server_url)
+# Optionally bake server URL into config.json in app bundle (shared script; same structure on all builds)
 if [[ -n "$SERVER_URL" ]]; then
   DATA_DIR="$APP_PATH/Contents/Resources/data"
-  mkdir -p "$DATA_DIR"
-  echo "$SERVER_URL" > "$DATA_DIR/server_url"
-  echo "Wrote server URL to $DATA_DIR/server_url"
+  bash "$SCRIPT_DIR/../shared/write_config_json.sh" "$DATA_DIR" "$SERVER_URL"
+  echo "Wrote server URL to $DATA_DIR/config.json"
 else
   echo "No server URL override provided; client will use default from src/config.lua"
 fi
