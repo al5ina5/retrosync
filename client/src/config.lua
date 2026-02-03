@@ -27,11 +27,12 @@ local function getAppDirectory()
 end
 
 M.APP_DIR = getAppDirectory()
--- On macOS fused .app the bundle is read-only; use LÖVE's writable save directory for data.
-if love and love.filesystem and love.filesystem.getSaveDirectory and love.system and love.system.getOS and love.system.getOS() == "OS X" then
+-- On macOS fused .app the bundle is read-only; use ~/.config/retrosync for writable data.
+if love and love.filesystem and love.filesystem.getSource and love.system and love.system.getOS and love.system.getOS() == "OS X" then
     local source = love.filesystem.getSource()
     if source and source ~= "" and not source:match("%.love$") then
-        M.DATA_DIR = love.filesystem.getSaveDirectory() .. "/data"
+        local home = os.getenv("HOME")
+        M.DATA_DIR = (home and home ~= "" and (home .. "/.config/retrosync")) or (M.APP_DIR .. "/data")
     else
         M.DATA_DIR = M.APP_DIR .. "/data"
     end
