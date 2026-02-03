@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Build RetroSync Linux package (bundled LÖVE runtime).
-# Requires: bash, curl, tar, zip.
+# Build RetroSync Linux package (bundled LÖVE AppImage).
+# Requires: bash, curl, zip.
 #
 # Usage: run from repo root or client/:
 #   npm run client:build:linux
@@ -84,7 +84,6 @@ if [[ -n "$SERVER_URL" ]]; then
 fi
 
 require_cmd curl
-require_cmd tar
 require_cmd zip
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -93,8 +92,8 @@ OUT_DIR="$CLIENT_ROOT/dist/linux"
 PACKAGE_DIR="$OUT_DIR/RetroSync"
 CACHE_DIR="$SCRIPT_DIR/.cache"
 LOVE_VERSION="11.5"
-LOVE_TAR="love-${LOVE_VERSION}-linux-x86_64.tar.gz"
-LOVE_URL="https://github.com/love2d/love/releases/download/${LOVE_VERSION}/${LOVE_TAR}"
+LOVE_APPIMAGE="love-${LOVE_VERSION}-x86_64.AppImage"
+LOVE_URL="https://github.com/love2d/love/releases/download/${LOVE_VERSION}/${LOVE_APPIMAGE}"
 
 mkdir -p "$OUT_DIR"
 mkdir -p "$CACHE_DIR"
@@ -119,34 +118,21 @@ echo "[1/5] Creating RetroSync.love ..."
 )
 echo "  -> $LOVE_FILE"
 
-TAR_CACHE_PATH="$CACHE_DIR/$LOVE_TAR"
-RUNTIME_DIR="$CACHE_DIR/love-${LOVE_VERSION}-linux-x86_64"
+APPIMAGE_CACHE_PATH="$CACHE_DIR/$LOVE_APPIMAGE"
 
 echo "[2/5] Ensuring LÖVE runtime (${LOVE_VERSION}) ..."
-if [[ ! -f "$TAR_CACHE_PATH" ]]; then
+if [[ ! -f "$APPIMAGE_CACHE_PATH" ]]; then
   echo "  Downloading $LOVE_URL"
-  curl -sSfL -o "$TAR_CACHE_PATH" "$LOVE_URL"
+  curl -sSfL -o "$APPIMAGE_CACHE_PATH" "$LOVE_URL"
 else
-  echo "  Using cached archive $TAR_CACHE_PATH"
+  echo "  Using cached archive $APPIMAGE_CACHE_PATH"
 fi
 
-echo "[3/5] Preparing runtime ..."
-rm -rf "$RUNTIME_DIR"
-mkdir -p "$RUNTIME_DIR"
-tar -xzf "$TAR_CACHE_PATH" -C "$CACHE_DIR"
-
+echo "[3/5] Preparing package ..."
 rm -rf "$PACKAGE_DIR"
 mkdir -p "$PACKAGE_DIR"
-cp -R "$RUNTIME_DIR"/. "$PACKAGE_DIR"/
-
-if [[ -f "$PACKAGE_DIR/love" ]]; then
-  mv "$PACKAGE_DIR/love" "$PACKAGE_DIR/RetroSync.bin"
-fi
-
-if [[ -f "$PACKAGE_DIR/lovec" ]]; then
-  rm "$PACKAGE_DIR/lovec"
-fi
-chmod +x "$PACKAGE_DIR/RetroSync.bin"
+cp "$APPIMAGE_CACHE_PATH" "$PACKAGE_DIR/RetroSync.AppImage"
+chmod +x "$PACKAGE_DIR/RetroSync.AppImage"
 
 echo "[4/5] Adding launch scripts ..."
 cp "$LOVE_FILE" "$PACKAGE_DIR/RetroSync.love"
@@ -156,8 +142,7 @@ cat > "$PACKAGE_DIR/RetroSync.sh" <<'EOF'
 set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-export LD_LIBRARY_PATH="$SCRIPT_DIR/lib${LD_LIBRARY_PATH:+:$LD_LIBRARY_PATH}"
-exec "$SCRIPT_DIR/RetroSync.bin" "$SCRIPT_DIR/RetroSync.love" "$@"
+exec "$SCRIPT_DIR/RetroSync.AppImage" "$SCRIPT_DIR/RetroSync.love" "$@"
 EOF
 chmod +x "$PACKAGE_DIR/RetroSync.sh"
 
@@ -172,18 +157,18 @@ RetroSync for Linux
 ===================
 
 Contents:
-  RetroSync.sh        - Launch script (recommended)
-  RetroSync.bin       - Bundled LÖVE runtime (x86_64)
+  RetroSync.AppImage  - Bundled LÖVE runtime (x86_64)
+  RetroSync.sh        - Helper script (recommended launcher)
   RetroSync.love      - Game archive (for troubleshooting)
-  lib/                - Required shared libraries
 
 Usage:
   1. Extract this folder anywhere.
   2. Run ./RetroSync.sh
-     (you may need to run: chmod +x RetroSync.sh)
+     (you may need to run: chmod +x RetroSync.sh RetroSync.AppImage)
   3. Pair the app using a code from retrosync.vercel.app.
 
 Optional:
+  - Run the AppImage directly: ./RetroSync.AppImage RetroSync.love
   - Create a desktop entry that calls RetroSync.sh if you want a launcher.
 EOF
 
