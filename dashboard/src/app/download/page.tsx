@@ -8,7 +8,9 @@ export default function DownloadPage() {
   const downloads = {
     portmaster: `${base}/retrosync-portmaster.zip`,
     macos: `${base}/retrosync-macos.zip`,
-    desktopLove: `${base}/retrosync.love`,
+    windows: `${base}/retrosync-windows.zip`,
+    linux: `${base}/retrosync-linux.zip`,
+    love: `${base}/retrosync.love`,
   };
 
   return (
@@ -41,6 +43,7 @@ export default function DownloadPage() {
               Download PortMaster ZIP
             </a>
           </div>
+
           <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
             <h3 className="font-medium text-lg mb-2">macOS</h3>
             <p className="text-sm text-gameboy-dark mb-3">
@@ -53,13 +56,39 @@ export default function DownloadPage() {
               Download macOS ZIP
             </a>
           </div>
+
+          <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
+            <h3 className="font-medium text-lg mb-2">Windows</h3>
+            <p className="text-sm text-gameboy-dark mb-3">
+              Bundled 64-bit executable with the LÖVE runtime included.
+            </p>
+            <a
+              href={downloads.windows}
+              className="inline-block border-2 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-4 py-2 text-sm"
+            >
+              Download Windows ZIP
+            </a>
+          </div>
+
+          <div className="border-2 border-gameboy-darkest bg-gameboy-lightest p-4 rounded-none">
+            <h3 className="font-medium text-lg mb-2">Linux</h3>
+            <p className="text-sm text-gameboy-dark mb-3">
+              Includes launch script, LÖVE runtime, and required libraries.
+            </p>
+            <a
+              href={downloads.linux}
+              className="inline-block border-2 border-gameboy-darkest bg-gameboy-darkest text-gameboy-lightest hover:bg-gameboy-lightest hover:text-gameboy-darkest px-4 py-2 text-sm"
+            >
+              Download Linux ZIP
+            </a>
+          </div>
         </div>
 
         <div className="border-2 border-gameboy-dark p-4 mt-6">
           <p className="text-sm">
-            <strong>Desktop (Windows/Linux)?</strong> Download the{" "}
-            <a className="underline" href={downloads.desktopLove}>.love file</a>{" "}
-            and run it with LÖVE 11.x.
+            <strong>Need the bare .love file?</strong>{" "}
+            <a className="underline" href={downloads.love}>Download it here</a>{" "}
+            to run with your own LÖVE 11.x installation.
           </p>
         </div>
       </section>

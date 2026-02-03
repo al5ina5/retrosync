@@ -5,7 +5,9 @@ export default function Downloads() {
     const downloads = {
         portmaster: `${base}/retrosync-portmaster.zip`,
         macos: `${base}/retrosync-macos.zip`,
-        desktopLove: `${base}/retrosync.love`,
+        windows: `${base}/retrosync-windows.zip`,
+        linux: `${base}/retrosync-linux.zip`,
+        love: `${base}/retrosync.love`,
     };
 
     return (
@@ -34,20 +36,34 @@ export default function Downloads() {
 
                 <div className="space-y-2">
                     <div>
-                        <a href={downloads.desktopLove}>
-                            <Button variant="primary">Windows (LÖVE)</Button>
+                        <a href={downloads.windows}>
+                            <Button variant="primary">Windows</Button>
                         </a>
                     </div>
-                    <p className="text-sm">Download the .love file and run with LÖVE 11.x.</p>
+                    <p className="text-sm">Bundled executable with the LÖVE runtime (64-bit).</p>
+                    <p className="text-xs text-gameboy-dark">
+                        Already have LÖVE?{" "}
+                        <a className="underline" href={downloads.love}>
+                            Download the .love file
+                        </a>
+                        .
+                    </p>
                 </div>
 
                 <div className="space-y-2">
                     <div>
-                        <a href={downloads.desktopLove}>
-                            <Button variant="primary">Linux (LÖVE)</Button>
+                        <a href={downloads.linux}>
+                            <Button variant="primary">Linux</Button>
                         </a>
                     </div>
-                    <p className="text-sm">Download the .love file and run with LÖVE 11.x.</p>
+                    <p className="text-sm">Includes LÖVE runtime and launch script.</p>
+                    <p className="text-xs text-gameboy-dark">
+                        Prefer your own runtime?{" "}
+                        <a className="underline" href={downloads.love}>
+                            Grab the .love archive
+                        </a>
+                        .
+                    </p>
                 </div>
 
             </div>
