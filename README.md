@@ -1,6 +1,6 @@
 # RetroSync
 
-**Download (latest):** [Windows](https://github.com/alsinas/retrosync/releases/latest/download/retrosync-windows.zip) · [macOS](https://github.com/alsinas/retrosync/releases/latest/download/retrosync-macos.zip) · [Linux](https://github.com/alsinas/retrosync/releases/latest/download/retrosync-linux.zip) · [PortMaster](https://github.com/alsinas/retrosync/releases/latest/download/retrosync-portmaster.zip) · [.love](https://github.com/alsinas/retrosync/releases/latest/download/retrosync.love)
+**Download (latest):** [Windows](https://github.com/al5ina5/retrosyncd/releases/latest/download/retrosync-windows.zip) · [macOS](https://github.com/al5ina5/retrosyncd/releases/latest/download/retrosync-macos.zip) · [Linux](https://github.com/al5ina5/retrosyncd/releases/latest/download/retrosync-linux.zip) · [PortMaster](https://github.com/al5ina5/retrosyncd/releases/latest/download/retrosync-portmaster.zip) · [.love](https://github.com/al5ina5/retrosyncd/releases/latest/download/retrosync.love)
 
 RetroSync is a cloud sync service for retro game battery saves that includes a web dashboard and a LÖVE (Lua) client for handhelds and desktop. This README is derived from the codebase behavior and structure, not from other docs.
 
