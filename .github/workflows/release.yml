@@ -13,6 +13,8 @@ jobs:
   # --- Build PortMaster package (handhelds / Linux PortMaster) on Ubuntu ---
   build-portmaster:
     runs-on: ubuntu-latest
+    env:
+      RETROSYNC_SERVER_URL: https://retrosync.vercel.app
     steps:
       - uses: actions/checkout@v4
 
@@ -50,7 +52,7 @@ jobs:
       - name: Build macOS app
         run: |
           test -f client/build/macos/build.sh || { echo "Missing client/build/macos/build.sh"; exit 1; }
-          bash client/build/macos/build.sh
+          bash client/build/macos/build.sh --prod
           test -d client/dist/macos || { echo "Missing client/dist/macos"; exit 1; }
           test -f client/dist/macos/RetroSync.love || { echo "Missing RetroSync.love"; exit 1; }
 

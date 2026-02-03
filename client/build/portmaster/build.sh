@@ -68,6 +68,14 @@ for script in "$CLIENT_DIR"/autostart/*.sh; do
   fi
 done
 
+# When building for release (e.g. CI sets RETROSYNC_SERVER_URL), bake production server URL
+# so the client uses the correct API without relying on config default or env on device.
+if [ -n "${RETROSYNC_SERVER_URL:-}" ]; then
+  mkdir -p "$BUILD_DIR/$GAME_NAME/data"
+  printf '%s' "$RETROSYNC_SERVER_URL" | sed 's|/$||' > "$BUILD_DIR/$GAME_NAME/data/server_url"
+  echo "  ✓ Baked server URL for release"
+fi
+
 cat > "$BUILD_DIR/$GAME_NAME/install-initd.sh" << 'INITD_EOF'
 #!/bin/bash
 set -euo pipefail
