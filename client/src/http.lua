@@ -31,13 +31,18 @@ function M.httpGet(url, headers)
     return nil
 end
 
+-- Escape path for use inside single-quoted shell argument (handles spaces, parens, etc.)
+local function shell_quote(path)
+    return "'" .. path:gsub("'", "'\\''") .. "'"
+end
+
 function M.httpPost(url, data, headers)
     local tmpfile = config.DATA_DIR .. "/http_resp.txt"
     local postfile = config.DATA_DIR .. "/http_post.txt"
     local errfile = config.DATA_DIR .. "/http_err.txt"
 
     pcall(function()
-        os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
+        os.execute("mkdir -p " .. shell_quote(config.DATA_DIR) .. " 2>/dev/null")
     end)
 
     log.logMessage("httpPost: " .. url)
@@ -68,7 +73,7 @@ function M.httpPost(url, data, headers)
 
     local escapedUrl = url:gsub("'", "'\\''")
     local exitCodeFile = config.DATA_DIR .. "/curl_exit.txt"
-    local cmd = "curl -s -m " .. timeout .. " -X POST " .. headerStr .. " -d @" .. postfile .. " '" .. escapedUrl .. "' > " .. tmpfile .. " 2>" .. errfile .. "; echo $? > " .. exitCodeFile
+    local cmd = "curl -s -m " .. timeout .. " -X POST " .. headerStr .. " -d @" .. shell_quote(postfile) .. " " .. shell_quote(url) .. " > " .. shell_quote(tmpfile) .. " 2> " .. shell_quote(errfile) .. "; echo $? > " .. shell_quote(exitCodeFile)
     log.logMessage("  Command: curl -s -m " .. timeout .. " -X POST ...")
     log.logMessage("  Executing curl command (timeout: " .. timeout .. "s)...")
     local startTime = os.time()
@@ -81,7 +86,7 @@ function M.httpPost(url, data, headers)
 
     if not ok then
         log.logMessage("ERROR: curl command failed: " .. tostring(err))
-        pcall(function() os.execute("rm -f '" .. postfile .. "' '" .. tmpfile .. "' '" .. errfile .. "' '" .. exitCodeFile .. "' 2>/dev/null") end)
+        pcall(function() os.execute("rm -f " .. shell_quote(postfile) .. " " .. shell_quote(tmpfile) .. " " .. shell_quote(errfile) .. " " .. shell_quote(exitCodeFile) .. " 2>/dev/null") end)
         return nil
     end
 
@@ -111,7 +116,7 @@ function M.httpPost(url, data, headers)
         else
             log.logMessage("ERROR: curl failed with exit code " .. exitCode)
         end
-        pcall(function() os.execute("rm -f '" .. postfile .. "' '" .. tmpfile .. "' '" .. errfile .. "' 2>/dev/null") end)
+        pcall(function() os.execute("rm -f " .. shell_quote(postfile) .. " " .. shell_quote(tmpfile) .. " " .. shell_quote(errfile) .. " 2>/dev/null") end)
         return nil
     end
 
@@ -127,11 +132,11 @@ function M.httpPost(url, data, headers)
         else
             log.logMessage("  Response: (empty)")
         end
-        pcall(function() os.execute("rm -f '" .. postfile .. "' '" .. tmpfile .. "' '" .. errfile .. "' 2>/dev/null") end)
+        pcall(function() os.execute("rm -f " .. shell_quote(postfile) .. " " .. shell_quote(tmpfile) .. " " .. shell_quote(errfile) .. " 2>/dev/null") end)
         return content
     else
         log.logMessage("ERROR: Failed to read response file: " .. tmpfile)
-        pcall(function() os.execute("rm -f '" .. postfile .. "' '" .. tmpfile .. "' '" .. errfile .. "' 2>/dev/null") end)
+        pcall(function() os.execute("rm -f " .. shell_quote(postfile) .. " " .. shell_quote(tmpfile) .. " " .. shell_quote(errfile) .. " 2>/dev/null") end)
     end
     return nil
 end

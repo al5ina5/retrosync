@@ -46,6 +46,30 @@ function M.loadServerUrl(state)
         end
     end
 
+    -- On macOS fused .app, prefer baked-in server_url from the app bundle so the
+    -- release build always uses production API regardless of PWD or stray files.
+    if love and love.filesystem and love.filesystem.getSource and love.system and love.system.getOS and love.system.getOS() == "OS X" then
+        local source = love.filesystem.getSource()
+        if source and source ~= "" and not source:match("%.love$") then
+            local bundleServerUrlFile = source .. "/data/server_url"
+            local f = io.open(bundleServerUrlFile, "r")
+            if f then
+                local line = f:read("*line")
+                f:close()
+                if line then
+                    line = line:match("^%s*(.-)%s*$")
+                    if line and line ~= "" then
+                        if line:sub(-1) == "/" then
+                            line = line:sub(1, -2)
+                        end
+                        state.serverUrl = line
+                        return line
+                    end
+                end
+            end
+        end
+    end
+
     local file = io.open(config.SERVER_URL_FILE, "r")
     if file then
         local line = file:read("*line")
