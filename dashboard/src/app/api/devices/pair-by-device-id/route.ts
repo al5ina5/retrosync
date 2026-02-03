@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest, generatePairingCode } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
+import { canAddDevice } from '@/lib/planLimits'
 import { z } from 'zod'
 import { checkRateLimit } from '@/lib/security'
 
@@ -35,6 +36,11 @@ export async function POST(request: NextRequest) {
     const validation = pairByDeviceIdSchema.safeParse(body)
     if (!validation.success) {
       return errorResponse(validation.error.errors[0].message)
+    }
+
+    const deviceLimit = await canAddDevice(user.userId)
+    if (!deviceLimit.allowed) {
+      return errorResponse(deviceLimit.reason || 'Device limit reached', 402)
     }
 
     const { deviceId } = validation.data

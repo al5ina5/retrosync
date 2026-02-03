@@ -91,6 +91,31 @@ export function useDevicesState(options: UseDevicesOptions = {}): UseDevicesRetu
     [onDeleteSuccess]
   );
 
+  const updateDevice = useCallback(
+    async (deviceId: string, name: string): Promise<boolean> => {
+      try {
+        const token = localStorage.getItem("token");
+        const response = await fetch("/api/devices", {
+          method: "PATCH",
+          headers: {
+            Authorization: `Bearer ${token}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ id: deviceId, name: name.trim() }),
+        });
+        const data = await response.json();
+        if (data.success) {
+          await mutate("/api/devices");
+          return true;
+        }
+        return false;
+      } catch {
+        return false;
+      }
+    },
+    []
+  );
+
   return {
     devices,
     isLoading,
@@ -105,5 +130,6 @@ export function useDevicesState(options: UseDevicesOptions = {}): UseDevicesRetu
     deleteDevice,
     isDeleting,
     deleteError,
+    updateDevice,
   };
 }

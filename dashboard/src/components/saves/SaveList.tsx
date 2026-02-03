@@ -5,16 +5,24 @@ import { useSaves } from "@/hooks";
 import { SaveItem } from "./SaveItem";
 
 export function SaveList() {
-  const { saves, isLoading, error, downloadError, deleteError, refresh } = useSaves();
+  const {
+    saves,
+    isLoading,
+    error,
+    downloadError,
+    deleteError,
+    strategyError,
+  } = useSaves();
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
   if (isLoading) return <div>Loading saves...</div>;
 
   return (
     <>
-      {/* {error && <div>{error.message}</div>}
+      {error && <div>{error.message}</div>}
+      {strategyError && <div>{strategyError}</div>}
       {downloadError && <div>{downloadError}</div>}
-      {deleteError && <div>{deleteError}</div>} */}
+      {deleteError && <div>{deleteError}</div>}
       <ul className="space-y-6">
         {saves.map((save) => (
           <SaveItem

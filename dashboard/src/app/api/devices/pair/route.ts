@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
+import { canAddDevice } from '@/lib/planLimits'
 import { z } from 'zod'
 import { checkRateLimit } from '@/lib/security'
 
@@ -66,6 +67,11 @@ export async function POST(request: NextRequest) {
     // Check if code is already linked to a different user
     if (pairingCode.userId && pairingCode.userId !== user.userId) {
       return errorResponse('Code is already linked to another account')
+    }
+
+    const deviceLimit = await canAddDevice(user.userId)
+    if (!deviceLimit.allowed) {
+      return errorResponse(deviceLimit.reason || 'Device limit reached', 402)
     }
 
     // Link code to user

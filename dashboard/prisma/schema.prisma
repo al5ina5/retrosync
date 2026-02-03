@@ -35,10 +35,28 @@ model Device {
   pairingCode   PairingCode?
   saveLocations SaveLocation[]
   saveVersions  SaveVersion[]
+  scanPaths     DeviceScanPath[]
   syncLogs      SyncLog[]
 
   @@index([userId])
   @@index([apiKey])
+}
+
+model DeviceScanPath {
+  id        String   @id @default(uuid())
+  deviceId  String
+  path      String
+  /// default | custom
+  kind      String
+  /// device | user
+  source    String   @default("device")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  device    Device   @relation(fields: [deviceId], references: [id], onDelete: Cascade)
+
+  @@unique([deviceId, path, kind], name: "deviceId_path_kind")
+  @@index([deviceId])
+  @@index([kind])
 }
 
 model PairingCode {

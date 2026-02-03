@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest, generatePairingCode } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
+import { canAddDevice } from '@/lib/planLimits'
 
 export async function POST(request: NextRequest) {
   try {
@@ -9,6 +10,11 @@ export async function POST(request: NextRequest) {
     const user = getUserFromRequest(request)
     if (!user) {
       return unauthorizedResponse()
+    }
+
+    const deviceLimit = await canAddDevice(user.userId)
+    if (!deviceLimit.allowed) {
+      return errorResponse(deviceLimit.reason || 'Device limit reached', 402)
     }
 
     // Generate 6-digit pairing code

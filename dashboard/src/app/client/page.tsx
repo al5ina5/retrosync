@@ -172,6 +172,15 @@ export default function ClientPage() {
                 </div>
             </ClientViewport>
 
+
+            {/* No paths (macOS/desktop: no preconfigured folders). Shown once after pairing; dismiss with A or click. */}
+            <ClientViewport>
+                <div className="h-full flex flex-col space-y-12 items-center justify-center">
+                    <p className="p-12 text-2xl text-center">RetroSync has not detected any paths with save files. To add a path, drag and drop a folder onto the RetroSync app&apos;s window at anytime or enter your device settings on your dashboard.</p>
+                    <p className="text-gameboy-lightest/85 text-lg">Dismiss with A or click</p>
+                </div>
+            </ClientViewport>
+
         </div>
     );
 }

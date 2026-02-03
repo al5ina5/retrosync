@@ -54,7 +54,8 @@ function love.load()
     
     log.consolidateLogs()
     device_history.load(state)
-    storage.loadCustomPaths(state)
+    local scan_paths = require("src.scan_paths")
+    scan_paths.load(state)
     
     log.logMessage("=== RetroSync App Started ===")
     log.logMessage("App directory: " .. config.APP_DIR)
@@ -299,6 +300,10 @@ function love.gamepadpressed(joystick, button)
     input.handleGamepadpressed(state, config, joystick, button)
 end
 
+function love.mousepressed(x, y, button, istouch, presses)
+    input.handleMousepressed(state, config, x, y, button)
+end
+
 
 -- Pairing/API: src.api; Saves list: src.saves_list (saves_list.fetchSavesList, saves_list.showFilesList)
 
@@ -363,9 +368,7 @@ function storage.saveDeviceName(name)
     end
 end
 
--- Custom paths: use storage.loadCustomPaths(state), storage.saveCustomPaths(state)
--- (loadCustomPaths/saveCustomPaths removed; now in storage.lua)
--- saveCustomPaths: use storage.saveCustomPaths(state)
+-- Scan paths: load/save in src/scan_paths.lua (scan_paths.json); add via storage.addTrackablePath (drag-drop).
 
 -- Device history: load/add in src/device_history.lua
 -- formatHistoryTime: src/ui.lua (ui.formatHistoryTime)

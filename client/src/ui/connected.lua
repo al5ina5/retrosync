@@ -99,7 +99,41 @@ function M.draw(state, config)
         love.graphics.setColor(p.darkR, p.darkG, p.darkB, alpha * 0.5)
         love.graphics.print(deviceStr, (screenWidth - deviceW) / 2, deviceY)
     end
+
+    -- No paths configured: show overlay when no scan paths (paths sync with server; manageable via web dashboard).
+    local paths = state.scanPathEntries or {}
+    if #paths == 0 and not state.noPathsMessageDismissed then
+        local PAD = design.P12
+        local GAP = design.SPACE_Y_6
+        love.graphics.setColor(p.darkestR, p.darkestG, p.darkestB, 0.95)
+        love.graphics.rectangle("fill", 0, 0, screenWidth, screenHeight)
+        local msgFont = state.deviceFont or state.codeFont
+        local subFont = state.smallFont or state.deviceFont
+        local msg = "RetroSync has not detected any paths with save files. To add a path, drag and drop a folder onto the RetroSync app's window at anytime or enter your device settings on your dashboard."
+        local _, _, contentW = design.contentBox(screenWidth, screenHeight, PAD)
+        local _, wrapped = msgFont:getWrap(msg, contentW)
+        local lineCount = wrapped and #wrapped or 1
+        local lineH = msgFont:getHeight()
+        local msgH = lineH * lineCount
+        local dismissStr = "Dismiss with A or click"
+        local dismissH = subFont:getHeight()
+        local totalH = msgH + GAP + dismissH
+        local blockTopY = (screenHeight - totalH) / 2
+        love.graphics.setColor(p.lightestR, p.lightestG, p.lightestB)
+        love.graphics.setFont(msgFont)
+        love.graphics.printf(msg, PAD, blockTopY, contentW, "center")
+        love.graphics.setFont(subFont)
+        love.graphics.setColor(p.lightestR, p.lightestG, p.lightestB, 0.9)
+        love.graphics.printf(dismissStr, PAD, blockTopY + msgH + GAP, contentW, "center")
+    end
+
     design.finishScreen()
+end
+
+-- Returns true when the "no paths" overlay is visible (so input can dismiss on A or click).
+function M.isNoPathsOverlayVisible(state, config)
+    local paths = state.scanPathEntries or {}
+    return state.currentState == config.STATE_CONNECTED and #paths == 0 and not state.noPathsMessageDismissed
 end
 
 return M

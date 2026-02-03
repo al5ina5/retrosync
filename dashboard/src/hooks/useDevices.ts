@@ -24,6 +24,7 @@ export interface UseDevicesReturn {
   deleteDevice: (deviceId: string) => Promise<boolean>;
   isDeleting: string | null;
   deleteError: string | null;
+  updateDevice: (deviceId: string, name: string) => Promise<boolean>;
 }
 
 export function useDevices(options: UseDevicesOptions = {}): UseDevicesReturn {

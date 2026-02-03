@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateApiKey } from '@/lib/auth'
 import { successResponse, errorResponse, generateDeviceName } from '@/lib/utils'
+import { canAddDevice } from '@/lib/planLimits'
 import { z } from 'zod'
 import { checkRateLimit } from '@/lib/security'
 
@@ -103,6 +104,11 @@ export async function POST(request: NextRequest) {
     // but guard defensively to satisfy types and avoid bad data.
     if (!pairingCode.userId) {
       return errorResponse('Invalid pairing code: missing user.', 400)
+    }
+
+    const deviceLimit = await canAddDevice(pairingCode.userId)
+    if (!deviceLimit.allowed) {
+      return errorResponse(deviceLimit.reason || 'Device limit reached', 402)
     }
 
     // Create device

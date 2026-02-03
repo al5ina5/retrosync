@@ -1,6 +1,6 @@
 -- src/api.lua
 -- Pairing: get code, check status, heartbeat, unpair.
--- Depends: config, state, http, storage, log, json (lib.dkjson)
+-- Depends: config, state, http, storage, log, json (lib.dkjson), fs
 
 local config = require("src.config")
 local state = require("src.state")
@@ -8,6 +8,8 @@ local http = require("src.http")
 local storage = require("src.storage")
 local log = require("src.log")
 local json = require("lib.dkjson")
+local fs = require("src.fs")
+local scan_paths = require("src.scan_paths")
 
 local M = {}
 
@@ -72,6 +74,7 @@ function M.checkPairingStatus()
                     state.currentState = config.STATE_CONNECTED
                     state.isPaired = true
                     state.pairingError = ""
+                    state.scanPathsDirty = true
                     log.logMessage("SUCCESS: Device paired! API key saved.")
                 else
                     state.pairingError = "No API key"
@@ -92,11 +95,31 @@ end
 function M.sendHeartbeat()
     if not state.apiKey then return end
     local headers = {["X-API-Key"] = state.apiKey}
-    http.httpPost(state.serverUrl .. "/api/sync/heartbeat", "{}", headers)
+    local now = os.time()
+    local shouldSendPaths = state.scanPathsDirty or (state.scanPathsLastSentAt or 0) == 0 or (now - (state.scanPathsLastSentAt or 0) > 3600)
+    local payload = "{}"
+    if shouldSendPaths then
+        local paths = scan_paths.getScanPaths(state)
+        payload = json.encode({ scanPaths = paths })
+    end
+
+    local resp = http.httpPost(state.serverUrl .. "/api/sync/heartbeat", payload, headers)
+    local result = nil
+    if resp and resp ~= "" then
+        local parsed, pos, err = json.decode(resp, 1, nil)
+        if not err then result = parsed end
+    end
+
+    if shouldSendPaths and result and result.success and result.data and result.data.scanPaths then
+        state.scanPathsLastSentAt = now
+        state.scanPathsDirty = false
+        scan_paths.applyFromServer(state, result.data.scanPaths)
+    end
 end
 
 function M.doUnpairDevice()
-    log.logMessage("doUnpairDevice: Clearing pairing data and returning to code screen")
+    log.logMessage("doUnpairDevice: Wiping data directory and returning to code screen")
+    -- Clear in-memory state first so no old code/keys remain
     state.apiKey = nil
     state.deviceName = nil
     state.deviceCode = nil
@@ -104,9 +127,9 @@ function M.doUnpairDevice()
     state.pairingError = ""
     state.homeSelectedIndex = 1
     state.codeIntroTimer = 0
-    pcall(function() os.remove(config.API_KEY_FILE) end)
-    pcall(function() os.remove(config.DEVICE_NAME_FILE) end)
-    pcall(function() os.remove(config.CODE_FILE) end)
+    -- Wipe entire data dir (code, api_key, device_name, theme, history, etc.)
+    -- Uses config.DATA_DIR: LÖVE getSaveDirectory() or APP_DIR/data from getAppDirectory()
+    fs.wipeDirectory(config.DATA_DIR)
     state.currentState = config.STATE_SHOWING_CODE
     M.getCodeFromServer()
 end

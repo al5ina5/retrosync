@@ -1,10 +1,11 @@
 -- src/fs.lua
--- File mtime get/set, ensureParentDir, findSaveFiles, path normalizers.
+-- File mtime get/set, ensureParentDir, findSaveFiles, path normalizers, wipeDirectory.
 -- Depends: config, log, state
 
 local config = require("src.config")
 local log = require("src.log")
 local state = require("src.state")
+local scan_paths = require("src.scan_paths")
 
 local M = {}
 
@@ -283,28 +284,10 @@ local function findSaveFiles()
     
     -- Use shell to find save files (LOVE2D filesystem is sandboxed)
     -- Only battery saves (.sav/.srm), no .bak files, no save states
-    local locations = {
-        -- SpruceOS / Onion-style (lowercase only to match watcher paths)
-        "/mnt/sdcard/Saves/saves",
-
-        -- muOS common roots (in-game saves)
-        "/mnt/mmc/MUOS/save/file",
-    }
-
-    -- macOS OpenEmu battery saves (desktop usage)
-    -- Typical layout:
-    --   ~/Library/Application Support/OpenEmu/<Core Name>/Battery Saves
-    do
-        local home = os.getenv("HOME")
-        if home and home ~= "" then
-            table.insert(locations, home .. "/Library/Application Support/OpenEmu")
-        end
-    end
-
-    -- Custom paths added via drag-and-drop (Mac/Windows)
-    for _, p in ipairs(state.customTrackablePaths) do
-        if p and p ~= "" then
-            table.insert(locations, p)
+    local locations = {}
+    for _, e in ipairs(scan_paths.getScanPaths(state)) do
+        if e and e.path and e.path ~= "" then
+            table.insert(locations, e.path)
         end
     end
 
@@ -367,11 +350,35 @@ local function findSaveFiles()
     return files
 end
 
+-- Wipe a directory entirely (remove all contents and the dir, then recreate).
+-- Uses config.DATA_DIR from caller; on LÖVE that is getSaveDirectory(), else APP_DIR/data.
+-- Cross-platform: Unix rm -rf + mkdir -p; Windows rmdir /s /q + mkdir.
+local function wipeDirectory(dirPath)
+    if not dirPath or dirPath == "" then
+        log.logMessage("wipeDirectory: No path given, skipping")
+        return
+    end
+    log.logMessage("wipeDirectory: Wiping data directory: " .. dirPath)
+    local isWindows = love and love.system and love.system.getOS and love.system.getOS() == "Windows"
+    if isWindows then
+        local winPath = dirPath:gsub("/", "\\")
+        local quoted = '"' .. winPath:gsub('"', '\\"') .. '"'
+        pcall(function() os.execute("rmdir /s /q " .. quoted .. " 2>nul") end)
+        pcall(function() os.execute("mkdir " .. quoted .. " 2>nul") end)
+    else
+        local escaped = dirPath:gsub("'", "'\\''")
+        pcall(function() os.execute("rm -rf '" .. escaped .. "' 2>/dev/null") end)
+        pcall(function() os.execute("mkdir -p '" .. escaped .. "' 2>/dev/null") end)
+    end
+    log.logMessage("wipeDirectory: Done")
+end
+
 M.getFileMtimeSeconds = getFileMtimeSeconds
 M.setFileMtimeSeconds = setFileMtimeSeconds
 M.ensureParentDir = ensureParentDir
 M.normalizePathForMatch = normalizePathForMatch
 M.normalizeBatterySaveKeyForMatch = normalizeBatterySaveKeyForMatch
 M.findSaveFiles = findSaveFiles
+M.wipeDirectory = wipeDirectory
 
 return M

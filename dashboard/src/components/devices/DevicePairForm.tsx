@@ -29,9 +29,9 @@ export function DevicePairForm() {
             {isPairing ? "Pairing..." : "Pair"}
           </button>
         </div>
-        {/* {pairingError && <span>{pairingError}</span>}
-        {pairingSuccess && <span>Device paired!</span>} */}
       </form>
+      {pairingError && <p className="p-2 text-sm text-red-600">{pairingError}</p>}
+      {pairingSuccess && <p className="p-2 text-sm text-green-700">Device paired!</p>}
     </div>
   );
 }

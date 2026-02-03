@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { getUserFromRequest } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
+import { canEnableSharedSave } from '@/lib/planLimits'
 import { z } from 'zod'
 
 const SYNC_STRATEGIES = ['shared', 'per_device'] as const
@@ -38,6 +39,13 @@ export async function PATCH(request: NextRequest) {
     if (!save) return errorResponse('Save not found', 404)
     if (save.userId !== user.userId) {
       return unauthorizedResponse('Not authorized to modify this save')
+    }
+
+    if (syncStrategy === 'shared') {
+      const sharedLimit = await canEnableSharedSave(user.userId, save.id)
+      if (!sharedLimit.allowed) {
+        return errorResponse(sharedLimit.reason || 'Shared save limit reached', 402)
+      }
     }
 
     await prisma.save.update({

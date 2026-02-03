@@ -277,16 +277,21 @@ upload_file() {
 
 discover_files() {
   # Output lines: path<TAB>mtime<TAB>size
-  local loc
-  # NOTE: Only use ONE case variant for each path to avoid duplicates on
-  # case-insensitive filesystems (FAT32). Using lowercase consistently.
-  local -a locations=(
-    "/mnt/sdcard/Saves/saves"
-    "/mnt/mmc/MUOS/save/file"
-  )
-
-  # Custom paths added via drag-and-drop in the client (data/custom_paths.txt)
-  if [[ -f "$DATA_DIR/custom_paths.txt" ]]; then
+  # Roots: scan_paths_flat.txt (written by client from scan_paths.json), else legacy custom_paths.txt, else defaults.
+  local -a locations=()
+  if [[ -f "$DATA_DIR/scan_paths_flat.txt" ]]; then
+    while IFS= read -r line || [[ -n "$line" ]]; do
+      line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+      [[ -z "$line" ]] && continue
+      [[ "$line" == *"/" ]] && line="${line%/}"
+      locations+=( "$line" )
+    done < "$DATA_DIR/scan_paths_flat.txt"
+  fi
+  if [[ ${#locations[@]} -eq 0 ]] && [[ -f "$DATA_DIR/custom_paths.txt" ]]; then
+    locations=( "/mnt/sdcard/Saves/saves" "/mnt/mmc/MUOS/save/file" )
+    if [[ -n "${HOME:-}" ]]; then
+      locations+=( "$HOME/Library/Application Support/OpenEmu" )
+    fi
     while IFS= read -r line || [[ -n "$line" ]]; do
       line="$(printf '%s' "$line" | sed 's/^[[:space:]]*//;s/[[:space:]]*$//')"
       [[ -z "$line" ]] && continue
@@ -294,7 +299,17 @@ discover_files() {
       locations+=( "$line" )
     done < "$DATA_DIR/custom_paths.txt"
   fi
+  if [[ ${#locations[@]} -eq 0 ]]; then
+    locations=(
+      "/mnt/sdcard/Saves/saves"
+      "/mnt/mmc/MUOS/save/file"
+    )
+    if [[ -n "${HOME:-}" ]]; then
+      locations+=( "$HOME/Library/Application Support/OpenEmu" )
+    fi
+  fi
 
+  local loc
   for loc in "${locations[@]}"; do
     [[ -d "$loc" ]] || continue
     log "discover_files: scanning root $(printf '%q' "$loc")"
@@ -483,4 +498,3 @@ while true; do
 
   sleep "$interval"
 done
-

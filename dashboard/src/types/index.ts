@@ -11,6 +11,23 @@ export interface DevicesResponse {
   devices: Device[];
 }
 
+export type ScanPathKind = "default" | "custom";
+export type ScanPathSource = "device" | "user";
+
+export interface DeviceScanPath {
+  id: string;
+  deviceId: string;
+  path: string;
+  kind: ScanPathKind;
+  source: ScanPathSource;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DeviceScanPathsResponse {
+  paths: DeviceScanPath[];
+}
+
 export type SyncStrategy = "shared" | "per_device";
 
 export interface SaveLocation {

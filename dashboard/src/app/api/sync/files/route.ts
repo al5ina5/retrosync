@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { extractApiKey } from '@/lib/auth'
 import { successResponse, errorResponse, unauthorizedResponse } from '@/lib/utils'
+import { canEnableSharedSave } from '@/lib/planLimits'
 import { listFiles, uploadFile } from '@/lib/s3'
 import crypto from 'crypto'
 
@@ -256,11 +257,19 @@ export async function POST(request: NextRequest) {
         }
 
         if (!save) {
+          const sharedLimit = await canEnableSharedSave(device.userId, null)
+          const syncStrategy = sharedLimit.allowed ? 'shared' : 'per_device'
+          if (!sharedLimit.allowed) {
+            console.log(
+              `[Upload] Free plan limit reached; creating save as per_device (user=${device.userId})`
+            )
+          }
           save = await prisma.save.create({
             data: {
               userId: device.userId,
               saveKey: normalizedSaveKey,
               displayName: canonicalDisplayName,
+              syncStrategy,
             },
           })
         } else if (matchedBySaveKey) {

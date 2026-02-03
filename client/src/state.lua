@@ -79,11 +79,14 @@ local state = {
     loadingBackState = nil,
     loadingDoneChannel = nil, -- love.thread channel to poll for completion
 
-    -- Custom paths (drag-and-drop)
-    customTrackablePaths = {},
+    -- Scan paths: single list from scan_paths.json (default + custom). Synced to server.
+    scanPathEntries = {},
     pathAddedMessage = nil,
     pathAddedAt = nil,
     dragOverWindow = false,  -- true while cursor held from outside is over window (isdropping)
+    scanPathsLastSentAt = 0,
+    scanPathsDirty = true,
+    noPathsMessageDismissed = false,  -- one-time "no paths" overlay dismissed (A or click)
 
     -- Intro / timers
     homeIntroTimer = 0,

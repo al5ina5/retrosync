@@ -40,7 +40,13 @@ M.CODE_FILE = M.DATA_DIR .. "/code"
 M.LOG_FILE = M.DATA_DIR .. "/debug.log"
 M.SERVER_URL_FILE = M.DATA_DIR .. "/server_url"
 M.HISTORY_FILE = M.DATA_DIR .. "/device_history.json"
+-- Single source of truth for scan roots (default + custom). Synced to server on heartbeat.
+M.SCAN_PATHS_FILE = M.DATA_DIR .. "/scan_paths.json"
+-- Flat list (one path per line) for watcher.sh; written whenever scan_paths.json is saved.
+M.SCAN_PATHS_FLAT_FILE = M.DATA_DIR .. "/scan_paths_flat.txt"
+-- Legacy; only used when migrating from old installs.
 M.CUSTOM_PATHS_FILE = M.DATA_DIR .. "/custom_paths.txt"
+M.NO_PATHS_DISMISSED_FILE = M.DATA_DIR .. "/no_paths_dismissed"
 M.AUDIO_PREFS_FILE = M.DATA_DIR .. "/audio_prefs"
 M.THEME_FILE = M.DATA_DIR .. "/theme"
 M.INSTALL_BG_SCRIPT = M.APP_DIR .. "/install-background-process.sh"

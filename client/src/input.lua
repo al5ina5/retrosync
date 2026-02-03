@@ -7,6 +7,7 @@ local upload = require("src.upload")
 local saves_list = require("src.saves_list")
 local settings_options = require("src.settings_options")
 local api = require("src.api")
+local connected_ui = require("src.ui.connected")
 
 local M = {}
 
@@ -39,6 +40,16 @@ function M.handleKeypressed(state, config, key)
     log.logMessage("love.keypressed: key=" .. tostring(key) .. ", state=" .. state.currentState)
     if state.currentState == config.STATE_LOADING then
         return
+    end
+    -- Dismiss "no paths" overlay with A or enter/space (per-session only; shows again next launch if still 0 paths)
+    if connected_ui.isNoPathsOverlayVisible(state, config) then
+        if key == "return" or key == "space" or key == "a" or key == "x" then
+            if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
+            state.noPathsMessageDismissed = true
+            log.logMessage("No paths overlay dismissed")
+            return
+        end
+        return  -- other keys do nothing while overlay is visible
     end
     if state.currentState == config.STATE_CONNECTED then
         if key == "up" then
@@ -182,6 +193,14 @@ function M.handleGamepadpressed(state, config, joystick, button)
     if state.currentState == config.STATE_LOADING then
         return
     end
+    if connected_ui.isNoPathsOverlayVisible(state, config) then
+        if button == "a" then
+            if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
+            state.noPathsMessageDismissed = true
+            log.logMessage("No paths overlay dismissed (gamepad)")
+        end
+        return
+    end
     if state.currentState == config.STATE_CONNECTED then
         if button == "dpup" then
             local prev = state.homeSelectedIndex
@@ -299,6 +318,16 @@ function M.handleGamepadpressed(state, config, joystick, button)
             state.currentState = config.STATE_CONNECTED
         elseif backButton and state.uploadJustStarted and state.currentState ~= config.STATE_SUCCESS then
             log.logMessage("love.gamepadpressed: Cancel ignored (upload just started, state=" .. state.currentState .. ")")
+        end
+    end
+end
+
+function M.handleMousepressed(state, config, x, y, button)
+    if connected_ui.isNoPathsOverlayVisible(state, config) then
+        if button == 1 then  -- left click
+            if state.soundsEnabled and state.uiSelectSound then state.uiSelectSound:stop(); state.uiSelectSound:play() end
+            state.noPathsMessageDismissed = true
+            log.logMessage("No paths overlay dismissed (click)")
         end
     end
 end

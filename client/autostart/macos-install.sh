@@ -70,7 +70,7 @@ launchctl unload "$PLIST" 2>/dev/null || true
 if launchctl load "$PLIST"; then
   touch "$MARKER"
   echo "RetroSync macOS autostart installed (plist: $PLIST)."
-  echo "Watcher will run at login. Add macOS save directories to data/custom_paths.txt if needed."
+  echo "Watcher will run at login. Add macOS save directories via the app (drag-drop) or dashboard; paths are stored in data/scan_paths.json."
   echo "Check status after boot: launchctl list | grep retrosync   or: ./autostart/macos-status.sh"
 else
   echo "ERROR: launchctl load failed for $PLIST"

@@ -2,6 +2,7 @@
 -- Custom paths panel (STATE_CUSTOM_PATHS). List paths + remove selected. Add paths by drag-drop only (see client/UX.md).
 
 local design = require("src.ui.design")
+local scan_paths = require("src.scan_paths")
 
 local M = {}
 
@@ -11,7 +12,7 @@ function M.draw(state, config, ui)
     design.drawScreenWithBorder(screenWidth, screenHeight)
 
     local layout = design.listLayout(screenWidth, screenHeight, state)
-    local paths = state.customTrackablePaths or {}
+    local paths = scan_paths.getCustomPathStrings(state)
     local totalRows = #paths + 1  -- paths + "Go Back"
     local sel = state.customPathsSelectedIndex
     if sel < 1 then state.customPathsSelectedIndex = 1; sel = 1

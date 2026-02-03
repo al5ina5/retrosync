@@ -2,6 +2,7 @@ import { NextRequest } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateApiKey } from '@/lib/auth'
 import { successResponse, errorResponse, generateDeviceName } from '@/lib/utils'
+import { canAddDevice } from '@/lib/planLimits'
 import { z } from 'zod'
 import { checkRateLimit } from '@/lib/security'
 
@@ -82,6 +83,11 @@ export async function POST(request: NextRequest) {
 
     // If code is linked to user but device not created yet
     if (pairingCode.userId && !pairingCode.used) {
+      const deviceLimit = await canAddDevice(pairingCode.userId)
+      if (!deviceLimit.allowed) {
+        return errorResponse(deviceLimit.reason || 'Device limit reached', 402)
+      }
+
       // Auto-create device and mark code as used
       const apiKey = generateApiKey()
       const deviceName = generateDeviceName()

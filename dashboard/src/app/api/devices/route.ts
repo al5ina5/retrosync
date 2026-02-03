@@ -41,6 +41,47 @@ export async function GET(request: NextRequest) {
 }
 
 /**
+ * PATCH /api/devices - Update a device (e.g. name)
+ */
+export async function PATCH(request: NextRequest) {
+  try {
+    const user = getUserFromRequest(request)
+    if (!user) {
+      return unauthorizedResponse()
+    }
+
+    const body = await request.json().catch(() => ({}))
+    const deviceId = body.id as string | undefined
+    const name = typeof body.name === 'string' ? body.name.trim() : undefined
+
+    if (!deviceId || !name) {
+      return errorResponse('id and name are required')
+    }
+
+    const device = await prisma.device.findFirst({
+      where: {
+        id: deviceId,
+        userId: user.userId,
+      },
+    })
+
+    if (!device) {
+      return errorResponse('Device not found', 404)
+    }
+
+    await prisma.device.update({
+      where: { id: deviceId },
+      data: { name },
+    })
+
+    return successResponse({ message: 'Device updated successfully' })
+  } catch (error) {
+    console.error('Update device error:', error)
+    return errorResponse('Failed to update device', 500)
+  }
+}
+
+/**
  * DELETE /api/devices - Delete a device
  */
 export async function DELETE(request: NextRequest) {

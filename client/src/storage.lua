@@ -141,68 +141,37 @@ function M.saveTheme(themeId)
     end
 end
 
-function M.loadCustomPaths(state)
-    state.customTrackablePaths = {}
-    local file = io.open(config.CUSTOM_PATHS_FILE, "r")
-    if not file then
-        getLog().logMessage("loadCustomPaths: no file at " .. config.CUSTOM_PATHS_FILE .. " (ok on first run)")
-        return
+-- Scan paths: load/save/add are in src.scan_paths (scan_paths.json). Wrapper for add-from-drag so API stays the same.
+function M.addTrackablePath(state, path, opts)
+    local scan_paths = require("src.scan_paths")
+    local ok = scan_paths.addPath(state, path, "custom")
+    if ok and (not opts or opts.markDirty ~= false) then
+        state.scanPathsDirty = true
     end
-    for line in file:lines() do
-        line = line:match("^%s*(.-)%s*$")
-        if line and line ~= "" then
-            if line:sub(-1) == "/" then
-                line = line:sub(1, -2)
-            end
-            table.insert(state.customTrackablePaths, line)
-        end
-    end
+    return ok
+end
+
+function M.loadNoPathsDismissed(state)
+    if not config.NO_PATHS_DISMISSED_FILE then return end
+    local file = io.open(config.NO_PATHS_DISMISSED_FILE, "r")
+    if not file then return end
+    local line = file:read("*l")
     file:close()
-    getLog().logMessage("loadCustomPaths: loaded " .. #state.customTrackablePaths .. " paths from " .. config.CUSTOM_PATHS_FILE)
-end
-
--- Normalize path for dedup: strip trailing slash, trim
-local function normalizePath(path)
-    if not path or path == "" then return nil end
-    path = path:match("^%s*(.-)%s*$")
-    if path == "" then return nil end
-    if path:sub(-1) == "/" then
-        path = path:sub(1, -2)
+    if line and (line == "1" or line:match("^%s*1%s*$")) then
+        state.noPathsMessageDismissed = true
     end
-    return path
 end
 
-function M.addTrackablePath(state, path)
-    local norm = normalizePath(path)
-    if not norm then return false end
-    for _, p in ipairs(state.customTrackablePaths) do
-        if p == norm then return false end
-    end
-    table.insert(state.customTrackablePaths, norm)
-    M.saveCustomPaths(state)
-    getLog().logMessage("Custom path added: " .. norm)
-    return true
-end
-
-function M.saveCustomPaths(state)
+function M.saveNoPathsDismissed(state)
+    if not config.NO_PATHS_DISMISSED_FILE then return end
     pcall(function()
         os.execute("mkdir -p '" .. config.DATA_DIR .. "' 2>/dev/null")
-        if love.system and love.system.getOS then
-            local osname = love.system.getOS()
-            if osname == "Windows" then
-                os.execute('mkdir "' .. config.DATA_DIR:gsub("/", "\\") .. '" 2>nul')
-            end
-        end
     end)
-    local file = io.open(config.CUSTOM_PATHS_FILE, "w")
+    local file = io.open(config.NO_PATHS_DISMISSED_FILE, "w")
     if file then
-        for _, p in ipairs(state.customTrackablePaths) do
-            file:write(p .. "\n")
-        end
+        file:write(state.noPathsMessageDismissed and "1" or "0")
+        file:write("\n")
         file:close()
-        getLog().logMessage("saveCustomPaths: saved " .. #state.customTrackablePaths .. " paths to " .. config.CUSTOM_PATHS_FILE)
-    else
-        getLog().logMessage("saveCustomPaths: failed to open " .. config.CUSTOM_PATHS_FILE .. " for writing")
     end
 end
 
