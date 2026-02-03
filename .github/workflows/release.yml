@@ -83,6 +83,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: portmaster-${{ github.ref_name }}
+          path: artifacts/portmaster
         continue-on-error: true
 
       - name: Download macOS artifacts
@@ -90,6 +91,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: macos-${{ github.ref_name }}
+          path: artifacts/macos
         continue-on-error: true
 
       # Gather whatever was downloaded so we only attach existing files
@@ -97,20 +99,24 @@ jobs:
         run: |
           mkdir -p release-assets
           V="${{ github.ref_name }}"
-          for f in "portmaster-${V}/retrosync-portmaster-${V}.zip" "portmaster-${V}/retrosync-${V}.love" "macos-${V}/retrosync-macos-${V}.zip"; do
+          for f in "artifacts/portmaster/retrosync-portmaster-${V}.zip" "artifacts/portmaster/retrosync-${V}.love" "artifacts/macos/retrosync-macos-${V}.zip"; do
             [ -f "$f" ] && cp "$f" release-assets/
           done
           # Also publish stable filenames for latest-download URLs.
-          if [ -f "portmaster-${V}/retrosync-portmaster-${V}.zip" ]; then
-            cp "portmaster-${V}/retrosync-portmaster-${V}.zip" "release-assets/retrosync-portmaster-latest.zip"
+          if [ -f "artifacts/portmaster/retrosync-portmaster-${V}.zip" ]; then
+            cp "artifacts/portmaster/retrosync-portmaster-${V}.zip" "release-assets/retrosync-portmaster-latest.zip"
           fi
-          if [ -f "portmaster-${V}/retrosync-${V}.love" ]; then
-            cp "portmaster-${V}/retrosync-${V}.love" "release-assets/retrosync-desktop-latest.love"
+          if [ -f "artifacts/portmaster/retrosync-${V}.love" ]; then
+            cp "artifacts/portmaster/retrosync-${V}.love" "release-assets/retrosync-desktop-latest.love"
           fi
-          if [ -f "macos-${V}/retrosync-macos-${V}.zip" ]; then
-            cp "macos-${V}/retrosync-macos-${V}.zip" "release-assets/retrosync-macos-latest.zip"
+          if [ -f "artifacts/macos/retrosync-macos-${V}.zip" ]; then
+            cp "artifacts/macos/retrosync-macos-${V}.zip" "release-assets/retrosync-macos-latest.zip"
           fi
           ls -la release-assets/
+          if [ -z "$(ls -A release-assets)" ]; then
+            echo "No release assets found. Failing release step."
+            exit 1
+          fi
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
